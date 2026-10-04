@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>СМ-Клиника — координатор маршрутов</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">СМ</div>
+      <div>
+        <div class="brand-title">СМ-Клиника</div>
+        <div class="brand-sub">Не потерять пациента · рабочее место координатора</div>
+      </div>
+    </div>
+    <nav class="tabs">
+      <button class="tab active" data-tab="routes">Маршруты</button>
+      <button class="tab" data-tab="dashboard">Дашборд</button>
+    </nav>
+    <div class="clock">
+      <span class="clock-label">Модельное время</span>
+      <span id="clock" class="clock-value">—</span>
+      <div class="clock-actions">
+        <button data-advance="24">+24 ч</button>
+        <button data-advance="72">+72 ч</button>
+        <button data-advance="168">+7 дн</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- ================= МАРШРУТЫ ================= -->
+    <section id="view-routes" class="view active">
+      <aside class="queue">
+        <div class="queue-head">
+          <input id="search" type="search" placeholder="Поиск: пациент, исследование, находка" />
+          <div class="filters">
+            <select id="filter-priority">
+              <option value="">Все приоритеты</option>
+              <option value="emergency">Экстренно</option>
+              <option value="urgent">Срочно</option>
+              <option value="planned">Планово</option>
+              <option value="watch">Наблюдение</option>
+            </select>
+            <select id="filter-specialty"><option value="">Все специальности</option></select>
+          </div>
+          <div id="queue-stats" class="queue-stats"></div>
+        </div>
+        <ul id="route-list" class="route-list"></ul>
+      </aside>
+
+      <section id="detail" class="detail">
+        <div class="empty">Выберите маршрут слева</div>
+      </section>
+    </section>
+
+    <!-- ================= ДАШБОРД ================= -->
+    <section id="view-dashboard" class="view">
+      <div class="dash-cards" id="dash-cards"></div>
+      <div class="dash-grid">
+        <div class="panel">
+          <h3>Воронка «находка → лечение»</h3>
+          <div id="funnel" class="funnel"></div>
+        </div>
+        <div class="panel">
+          <h3>Маршруты по специальностям</h3>
+          <div id="by-specialty" class="bars"></div>
+          <h3 style="margin-top:24px">Статусы</h3>
+          <div id="by-status" class="bars"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

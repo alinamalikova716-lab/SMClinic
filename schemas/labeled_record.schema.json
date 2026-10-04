@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "LabeledProtocol",
+  "description": "Одна запись разметки: протокол -> находки -> маршрут. Является контрактом между ML и интерфейсом.",
+  "type": "object",
+  "required": ["protocol_id", "study", "findings", "routes"],
+  "additionalProperties": true,
+  "properties": {
+    "protocol_id": {
+      "type": "string",
+      "description": "Стабильный id протокола. Один и тот же при повторной выдаче/исправлении."
+    },
+    "patient": {
+      "type": "object",
+      "description": "Только обезличенные данные, без ПДн.",
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string", "description": "Обезличенный идентификатор, например П-1234" },
+        "age": { "type": ["integer", "null"], "minimum": 0, "maximum": 120 },
+        "sex": { "type": "string", "enum": ["Ж", "М"] }
+      }
+    },
+    "study": {
+      "type": "object",
+      "required": ["type", "date"],
+      "properties": {
+        "type": { "type": "string", "description": "Например: УЗИ органов малого таза" },
+        "date": { "type": "string", "description": "ISO 8601, например 2026-08-13T10:00:00" }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "description": "Все находки, включая отрицаемые. Маршрут строится только по status=trigger.",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "status", "evidence"],
+        "properties": {
+          "id": { "type": "string", "description": "Код находки из единого справочника" },
+          "title": { "type": "string", "description": "Человекочитаемое название" },
+          "domain": { "type": "string", "description": "Направление/специальность" },
+          "severity": { "type": "string", "enum": ["urgent", "planned", "watch"] },
+          "status": { "type": "string", "enum": ["trigger", "uncertain", "negated"] },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+          "evidence": { "type": "string", "description": "Цитата из протокола (объяснимость)" },
+          "match": { "type": "string", "description": "Точная подстрока, вызвавшая срабатывание" },
+          "marker": { "type": "string", "description": "Маркер неопределённости, если status=uncertain (напр. «нельзя исключить»)" },
+          "attributes": { "type": "object", "description": "Размер, BI-RADS, TI-RADS и т.п." },
+          "rule_version": { "type": "string" }
+        }
+      }
+    },
+    "routes": {
+      "type": "array",
+      "description": "По одному маршруту на каждую находку со status=trigger. Именно routes[], а не routes[0] — иначе при нескольких находках маршруты теряются.",
+      "items": {
+      "type": "object",
+      "required": ["specialist", "next_step"],
+      "properties": {
+        "finding_id": { "type": "string", "description": "К какой находке относится маршрут" },
+        "specialist": { "type": "string" },
+        "next_step": { "type": "string" },
+        "planned_step": { "type": "string" },
+        "target_days": { "type": "integer", "minimum": 0, "description": "SLA в сутках" },
+        "priority": {
+          "type": "string",
+          "enum": ["emergency", "urgent", "planned", "watch"],
+          "description": "Срочность. Задаётся детерминированной матрицей правил (routing.json), утверждённой медэкспертом; не LLM."
+        },
+        "priority_reason": { "type": "string", "description": "Обоснование срочности, 1 фраза" },
+        "department": { "type": "string" },
+        "urgent": { "type": "boolean" }
+      }
+      }
+    }
+  }
+}

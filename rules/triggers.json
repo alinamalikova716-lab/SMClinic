@@ -1,0 +1,392 @@
+{
+  "version": "0.4",
+  "findings": [
+    {
+      "id": "endometrial_polyp",
+      "title": "Полип эндометрия",
+      "domain": "Гинекология",
+      "severity": "planned",
+      "patterns": ["полип", "полиповидное образование"],
+      "require_context": ["эндометр", "полости матки", "полость матки"],
+      "context_window": 40,
+      "attributes": ["size"]
+    },
+    {
+      "id": "endometrial_hyperplasia",
+      "title": "Гиперплазия эндометрия",
+      "domain": "Гинекология",
+      "severity": "planned",
+      "patterns": ["гиперплазия эндометрия", "гиперплазии эндометрия", "гиперпластический процесс", "гиперпластические изменения"],
+      "attributes": ["endometrium_thickness"]
+    },
+    {
+      "id": "endometrium_changes",
+      "title": "Изменения эндометрия",
+      "domain": "Гинекология",
+      "severity": "planned",
+      "patterns": ["несоответствие толщины", "неоднородн", "изменени", "несоответств", "утолщени"],
+      "require_context": ["эндометр"],
+      "attributes": ["endometrium_thickness"]
+    },
+    {
+      "id": "myometrium_changes",
+      "title": "Изменения миометрия",
+      "domain": "Гинекология",
+      "severity": "watch",
+      "patterns": ["диффузные изменения миометрия", "диффузные изменения в миометрии",
+                   "диффузные изменения структуры миометрия", "структура миометрия неоднородн",
+                   "миометрий неоднородн", "миометрия неоднородн"],
+      "attributes": []
+    },
+    {
+      "id": "submucous_myoma",
+      "title": "Субмукозный миоматозный узел",
+      "domain": "Гинекология",
+      "severity": "planned",
+      "patterns": ["субмукозн", "деформация полости матки", "деформации полости матки"],
+      "attributes": ["size"]
+    },
+    {
+      "id": "myoma",
+      "title": "Миоматозные узлы",
+      "domain": "Гинекология",
+      "severity": "watch",
+      "patterns": [{ "regex": "миом(а|ы|е|у|ой)\\b|миоматоз|фибромиом" }],
+      "attributes": ["size"]
+    },
+    {
+      "id": "adenomyosis",
+      "title": "Аденомиоз",
+      "domain": "Гинекология",
+      "severity": "watch",
+      "patterns": ["аденомиоз"],
+      "attributes": []
+    },
+    {
+      "id": "endometriosis",
+      "title": "Эндометриоз",
+      "domain": "Гинекология",
+      "severity": "watch",
+      "patterns": ["эндометриоз"],
+      "attributes": []
+    },
+    {
+      "id": "ovarian_formation",
+      "title": "Образование/киста яичника",
+      "domain": "Гинекология",
+      "severity": "planned",
+      "patterns": ["образовани", { "regex": "кист(а|ы|е|у|ой|ами)\\b" }],
+      "require_context": ["яичник", "придатк", "параовариальн", "праовариальн", "левоовариальн"],
+      "attributes": ["size"]
+    },
+    {
+      "id": "multifollicular_ovaries",
+      "title": "Мультифолликулярная структура яичников",
+      "domain": "Гинекология",
+      "severity": "watch",
+      "patterns": ["мультифолликулярн", "множество фолликулов", "множественные фолликулы"],
+      "require_context": ["яичник", "придатк", "овариальн"],
+      "attributes": []
+    },
+    {
+      "id": "cervical_changes",
+      "title": "Изменения шейки матки (кисты, эндоцервикоз)",
+      "domain": "Гинекология",
+      "severity": "watch",
+      "patterns": [{ "regex": "кист(а|ы|е|у|ой|ами)\\b" }, "кистозн", "эндоцервикоз", "цервицит", "эктропион"],
+      "require_context": ["шейк"],
+      "attributes": ["size"]
+    },
+    {
+      "id": "cervical_polyp",
+      "title": "Полип шейки матки",
+      "domain": "Гинекология",
+      "severity": "planned",
+      "patterns": ["полип"],
+      "require_context": ["шейк", "цервикальн"],
+      "context_window": 30,
+      "attributes": ["size"]
+    },
+    {
+      "id": "breast_formation",
+      "title": "Очаговое образование молочной железы",
+      "domain": "Маммология",
+      "severity": "planned",
+      "patterns": ["фиброаденома", "очаговое образование", "образование молочной железы", "объемное образование"],
+      "attributes": ["size"]
+    },
+    {
+      "id": "breast_birads_high",
+      "title": "Образование молочной железы BI-RADS 3-5",
+      "domain": "Маммология",
+      "severity": "planned",
+      "patterns": [
+        { "text": "bi-rads", "guard": { "kind": "birads", "min": 3 } },
+        { "text": "bi rads", "guard": { "kind": "birads", "min": 3 } }
+      ],
+      "attributes": ["size", "birads"]
+    },
+    {
+      "id": "breast_mastopathy",
+      "title": "Мастопатия / диффузные изменения молочных желез",
+      "domain": "Маммология",
+      "severity": "watch",
+      "patterns": ["мастопати", "кистозн", "диффузн", "жировая инволюци", "изменения"],
+      "require_context": ["молочн", "м/ж", "мж", "мамм"],
+      "exclude_context": ["мелкокистозн"],
+      "attributes": []
+    },
+    {
+      "id": "breast_fibrosis",
+      "title": "Локальный фиброз молочной железы",
+      "domain": "Маммология",
+      "severity": "watch",
+      "patterns": ["фиброз"],
+      "require_context": ["молочн", "м/ж", "мж"],
+      "attributes": []
+    },
+    {
+      "id": "breast_cyst",
+      "title": "Киста молочной железы",
+      "domain": "Маммология",
+      "severity": "watch",
+      "patterns": [{ "regex": "кист(а|ы|е|у|ой|ами)\\b" }],
+      "require_context": ["молочн", "м/ж", "мж"],
+      "attributes": ["size"]
+    },
+    {
+      "id": "mastitis",
+      "title": "Мастит / воспалительные изменения молочной железы",
+      "domain": "Маммология",
+      "severity": "planned",
+      "patterns": ["мастит"],
+      "attributes": []
+    },
+    {
+      "id": "thyroid_nodule",
+      "title": "Узловое образование щитовидной железы",
+      "domain": "Эндокринология/Хирургия",
+      "severity": "planned",
+      "patterns": ["узл", "узловое образование", "узловые образования", "узловой зоб",
+                   "макрофолликул", "микрофолликул", "губчатый узел",
+                   { "text": "ti-rads", "guard": { "kind": "tirads", "min": 3 } }],
+      "require_context": ["щитовидн"],
+      "exclude_context": ["лимфоу", "л/уз", "лимфатическ"],
+      "attributes": ["size", "tirads"]
+    },
+    {
+      "id": "thyroid_diffuse",
+      "title": "Диффузные изменения щитовидной железы (АИТ, зоб)",
+      "domain": "Эндокринология",
+      "severity": "watch",
+      "patterns": ["аит", "аутоиммунн", "диффузн", "зоб", "изменения"],
+      "require_context": ["щитовидн", "тиреоидн", "щж"],
+      "attributes": []
+    },
+    {
+      "id": "cholelithiasis",
+      "title": "Желчнокаменная болезнь (конкременты)",
+      "domain": "Хирургия",
+      "severity": "planned",
+      "patterns": ["конкремент", "камн", "желчнокаменн", "калькулезн", "холецистолитиаз"],
+      "require_context": ["желчн", "пузыр"],
+      "attributes": ["size", "count"]
+    },
+    {
+      "id": "gallbladder_polyp",
+      "title": "Полип желчного пузыря",
+      "domain": "Хирургия",
+      "severity": "planned",
+      "patterns": ["полип", "полипоз"],
+      "require_context": ["желчн", "пузыр"],
+      "context_window": 25,
+      "attributes": ["size"]
+    },
+    {
+      "id": "gallbladder_sludge",
+      "title": "Сладж / взвесь в желчном пузыре",
+      "domain": "Гастроэнтерология",
+      "severity": "watch",
+      "patterns": ["сладж", "взвес", "замазкообразн"],
+      "require_context": ["желчн", "пузыр"],
+      "attributes": []
+    },
+    {
+      "id": "biliary_dyskinesia",
+      "title": "Дискинезия желчного пузыря",
+      "domain": "Гастроэнтерология",
+      "severity": "watch",
+      "patterns": ["дискинези", "гипомоторн", "гипермоторн"],
+      "require_context": ["желчн", "пузыр"],
+      "attributes": []
+    },
+    {
+      "id": "cholecystitis",
+      "title": "Холецистит",
+      "domain": "Гастроэнтерология",
+      "severity": "planned",
+      "patterns": ["холецистит"],
+      "require_context": ["желчн", "пузыр"],
+      "attributes": []
+    },
+    {
+      "id": "hepatomegaly",
+      "title": "Гепатомегалия",
+      "domain": "Гастроэнтерология",
+      "severity": "watch",
+      "patterns": ["гепатомегали", "увеличение печени", "увеличения печени", "увеличены размеры"],
+      "require_context": ["печен", "гепатомегали"],
+      "attributes": []
+    },
+    {
+      "id": "hepatic_steatosis",
+      "title": "Диффузные изменения / стеатоз печени",
+      "domain": "Гастроэнтерология",
+      "severity": "watch",
+      "patterns": ["гепатоз", "стеатоз", "жиров", "липоматоз", "диффузн", "изменения"],
+      "require_context": ["печен"],
+      "attributes": []
+    },
+    {
+      "id": "liver_hemangioma",
+      "title": "Гемангиома печени",
+      "domain": "Гастроэнтерология",
+      "severity": "watch",
+      "patterns": ["гемангиом"],
+      "require_context": ["печен"],
+      "attributes": ["size"]
+    },
+    {
+      "id": "pancreatic_changes",
+      "title": "Диффузные изменения поджелудочной железы",
+      "domain": "Гастроэнтерология",
+      "severity": "watch",
+      "patterns": ["диффузн", "липоматоз", "изменения", "изменени"],
+      "require_context": ["поджелудочн"],
+      "attributes": []
+    },
+    {
+      "id": "splenomegaly",
+      "title": "Изменения селезёнки",
+      "domain": "Гастроэнтерология",
+      "severity": "watch",
+      "patterns": ["спленомегали", "увеличение селезенк", "увеличения селезенк"],
+      "attributes": []
+    },
+    {
+      "id": "kidney_cyst",
+      "title": "Киста почки",
+      "domain": "Урология",
+      "severity": "watch",
+      "patterns": [{ "regex": "кист(а|ы|е|у|ой|ами)\\b" }],
+      "require_context": ["почк"],
+      "attributes": ["size"]
+    },
+    {
+      "id": "hydronephrosis",
+      "title": "Гидронефроз",
+      "domain": "Урология",
+      "severity": "planned",
+      "patterns": ["гидронефроз", "пиелоэктазия"],
+      "attributes": []
+    },
+    {
+      "id": "urolithiasis",
+      "title": "Конкременты почек/МВП",
+      "domain": "Урология",
+      "severity": "planned",
+      "patterns": ["конкремент", "камн", "микролиты"],
+      "require_context": ["почк", "мочеточник", "чашечн", "лоханк"],
+      "attributes": ["size"]
+    },
+    {
+      "id": "bph",
+      "title": "ДГПЖ / гиперплазия предстательной железы",
+      "domain": "Урология",
+      "severity": "watch",
+      "patterns": ["дгпж", "гиперплази", "аденома простаты", "аденома предстательной",
+                   "увеличение предстательной", "увеличения предстательной", "увеличение объема", "увеличения объема"],
+      "require_context": ["предстательн", "простаты", "дгпж"],
+      "attributes": []
+    },
+    {
+      "id": "prostatitis",
+      "title": "Диффузные изменения / простатит предстательной железы",
+      "domain": "Урология",
+      "severity": "watch",
+      "patterns": ["простатит", "диффузн", "неоднородн", "изменения", "изменени", "фиброз"],
+      "require_context": ["предстательн", "простаты"],
+      "attributes": []
+    },
+    {
+      "id": "prostate_calcification",
+      "title": "Кальцинаты предстательной железы",
+      "domain": "Урология",
+      "severity": "watch",
+      "patterns": ["кальцинат", "микрокальциноз"],
+      "require_context": ["предстательн", "простаты"],
+      "attributes": []
+    },
+    {
+      "id": "prostate_cyst",
+      "title": "Киста предстательной железы",
+      "domain": "Урология",
+      "severity": "watch",
+      "patterns": [{ "regex": "кист(а|ы|е|у|ой|ами)\\b" }],
+      "require_context": ["предстательн", "простаты"],
+      "attributes": ["size"]
+    },
+    {
+      "id": "urinary_retention",
+      "title": "Нарушение пассажа мочи / остаточная моча",
+      "domain": "Урология",
+      "severity": "planned",
+      "patterns": ["остаточной мочи", "остаточная моча", "пассажа мочи", "нарушение пассажа", "деформации шейки мочевого"],
+      "attributes": []
+    },
+    {
+      "id": "venous_thrombosis",
+      "title": "Тромбоз / окклюзия вен",
+      "domain": "Флебология/Хирургия",
+      "severity": "urgent",
+      "patterns": ["тромбоз", "окклюзия", "флотирующий тромб", "тромб "],
+      "require_context": ["вен", "венозн"],
+      "attributes": ["size"]
+    },
+    {
+      "id": "varicose_veins",
+      "title": "Варикозная болезнь / несостоятельность вен",
+      "domain": "Флебология",
+      "severity": "watch",
+      "patterns": ["варикозн", "несостоятельност"],
+      "require_context": ["бпв", "ствол", "подкожн", "конечност", "вен нижн"],
+      "attributes": []
+    },
+    {
+      "id": "pelvic_varicose",
+      "title": "Варикозное расширение вен малого таза",
+      "domain": "Флебология",
+      "severity": "watch",
+      "patterns": ["варикозн", "расширение вен"],
+      "require_context": ["малого таза", "таза"],
+      "attributes": ["size"]
+    },
+    {
+      "id": "peripheral_atherosclerosis",
+      "title": "Стенозирующий атеросклероз артерий",
+      "domain": "Сосудистая хирургия",
+      "severity": "watch",
+      "patterns": ["стенозирующий атеросклероз", "стеноз", "атеросклероз", "атеросклеротическ", "бляшк"],
+      "exclude_context": ["нестенозиру", "незначим", "не получено", "значимых атеросклеротических бляшек"],
+      "attributes": []
+    },
+    {
+      "id": "hernia",
+      "title": "Грыжа",
+      "domain": "Хирургия",
+      "severity": "planned",
+      "patterns": ["грыжа", "грыжев"],
+      "attributes": ["size"]
+    }
+  ]
+}

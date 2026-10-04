@@ -1,0 +1,407 @@
+{
+  "version": "0.2",
+  "priorities": {
+    "emergency": { "label": "Экстренно", "sla_days": 1,  "color": "red",    "description": "Немедленная эскалация дежурному специалисту" },
+    "urgent":    { "label": "Срочно",    "sla_days": 3,  "color": "orange", "description": "Консультация в течение 3 суток" },
+    "planned":   { "label": "Планово",   "sla_days": 14, "color": "blue",   "description": "Плановая консультация до 14 суток" },
+    "watch":     { "label": "Наблюдение","sla_days": 30, "color": "gray",   "description": "Динамическое наблюдение, плановый контроль" }
+  },
+  "default": {
+    "specialist": "Профильный специалист",
+    "next_step": "Консультация профильного специалиста",
+    "target_days": 14,
+    "priority": "planned",
+    "priority_reason": "Плановая тактика по умолчанию",
+    "department": "Координатор клинических маршрутов"
+  },
+  "routes": {
+    "endometrial_polyp": {
+      "specialist": "Оперирующий гинеколог",
+      "next_step": "Консультация оперирующего гинеколога",
+      "planned_step": "Гистероскопия / гистерорезектоскопия",
+      "target_days": 7,
+      "priority": "planned",
+      "priority_reason": "Хирургически значимая находка, плановая операция",
+      "department": "Координатор хирургического маршрута"
+    },
+    "endometrial_hyperplasia": {
+      "specialist": "Оперирующий гинеколог",
+      "next_step": "Консультация оперирующего гинеколога",
+      "planned_step": "Гистероскопия, РДВ",
+      "target_days": 7,
+      "priority": "planned",
+      "priority_reason": "Риск гиперпластического процесса, нужна верификация",
+      "department": "Координатор хирургического маршрута"
+    },
+    "submucous_myoma": {
+      "specialist": "Оперирующий гинеколог",
+      "next_step": "Консультация оперирующего гинеколога",
+      "planned_step": "Гистерорезектоскопия",
+      "target_days": 7,
+      "priority": "planned",
+      "priority_reason": "Субмукозный узел — показание к плановой операции",
+      "department": "Координатор хирургического маршрута"
+    },
+    "myoma": {
+      "specialist": "Гинеколог",
+      "next_step": "Консультация гинеколога (определение тактики)",
+      "planned_step": "Динамическое наблюдение / оперативное лечение по показаниям",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Возможно динамическое наблюдение при отсутствии жалоб",
+      "department": "Координатор клинических маршрутов"
+    },
+    "ovarian_formation": {
+      "specialist": "Гинеколог",
+      "next_step": "Консультация гинеколога",
+      "planned_step": "Уточняющая диагностика (МРТ/контроль УЗИ), решение об операции",
+      "target_days": 10,
+      "priority": "planned",
+      "priority_reason": "Требуется уточнение характера образования",
+      "department": "Координатор клинических маршрутов"
+    },
+    "breast_formation": {
+      "specialist": "Маммолог / онколог",
+      "next_step": "Консультация маммолога",
+      "planned_step": "Биопсия / дальнейший маршрут по BI-RADS",
+      "target_days": 3,
+      "priority": "urgent",
+      "priority_reason": "Подозрение на онкопатологию (BI-RADS 3-5) — ускоренный маршрут",
+      "department": "Координатор хирургического маршрута"
+    },
+    "cholelithiasis": {
+      "specialist": "Хирург",
+      "next_step": "Консультация хирурга",
+      "planned_step": "Лапароскопическая холецистэктомия",
+      "target_days": 10,
+      "priority": "planned",
+      "priority_reason": "Плановое оперативное лечение ЖКБ",
+      "department": "Координатор хирургического маршрута"
+    },
+    "gallbladder_polyp": {
+      "specialist": "Хирург",
+      "next_step": "Консультация хирурга",
+      "planned_step": "Холецистэктомия / наблюдение (по размеру)",
+      "target_days": 10,
+      "priority": "planned",
+      "priority_reason": "Риск малигнизации полипа, плановая тактика",
+      "department": "Координатор хирургического маршрута"
+    },
+    "thyroid_nodule": {
+      "specialist": "Эндокринолог / хирург",
+      "next_step": "Консультация эндокринолога",
+      "planned_step": "ТАБ по TI-RADS, решение о резекции",
+      "target_days": 14,
+      "priority": "planned",
+      "priority_reason": "Узлы требуют оценки по TI-RADS",
+      "department": "Координатор клинических маршрутов"
+    },
+    "venous_thrombosis": {
+      "specialist": "Сосудистый хирург (срочно)",
+      "next_step": "Срочная консультация сосудистого хирурга",
+      "planned_step": "Антикоагулянтная терапия / операция",
+      "target_days": 1,
+      "priority": "emergency",
+      "priority_reason": "Риск ТЭЛА / потери конечности — экстренная эскалация",
+      "department": "Дежурный сосудистый хирург",
+      "urgent": true
+    },
+    "peripheral_atherosclerosis": {
+      "specialist": "Сосудистый хирург",
+      "next_step": "Консультация сосудистого хирурга",
+      "planned_step": "Контроль липидов, УЗДГ в динамике",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Начальные проявления, наблюдение и коррекция факторов риска",
+      "department": "Координатор клинических маршрутов"
+    },
+    "hernia": {
+      "specialist": "Хирург",
+      "next_step": "Консультация хирурга",
+      "planned_step": "Плановое оперативное лечение",
+      "target_days": 14,
+      "priority": "planned",
+      "priority_reason": "Риск ущемления, плановое оперативное лечение",
+      "department": "Координатор хирургического маршрута"
+    },
+    "hydronephrosis": {
+      "specialist": "Уролог",
+      "next_step": "Консультация уролога",
+      "planned_step": "Дообследование, решение о дренировании/операции",
+      "target_days": 3,
+      "priority": "urgent",
+      "priority_reason": "Риск потери функции почки — ускоренный маршрут",
+      "department": "Координатор хирургического маршрута"
+    },
+    "urolithiasis": {
+      "specialist": "Уролог",
+      "next_step": "Консультация уролога",
+      "planned_step": "Уточняющая диагностика, литотрипсия по показаниям",
+      "target_days": 3,
+      "priority": "urgent",
+      "priority_reason": "Риск почечной колики и обструкции",
+      "department": "Координатор клинических маршрутов"
+    },
+    "adenomyosis": {
+      "specialist": "Гинеколог",
+      "next_step": "Консультация гинеколога (определение тактики)",
+      "planned_step": "Динамическое наблюдение / терапия по показаниям",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Требует наблюдения, плановая тактика",
+      "department": "Координатор клинических маршрутов"
+    },
+    "endometriosis": {
+      "specialist": "Гинеколог",
+      "next_step": "Консультация гинеколога (определение тактики)",
+      "planned_step": "Дообследование / терапия по показаниям",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Требует наблюдения и уточнения тактики",
+      "department": "Координатор клинических маршрутов"
+    },
+    "varicose_veins": {
+      "specialist": "Сосудистый хирург (флеболог)",
+      "next_step": "Консультация флеболога",
+      "planned_step": "УЗДГ в динамике, компрессия / операция по показаниям",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Хроническая венозная патология, плановая тактика",
+      "department": "Координатор клинических маршрутов"
+    },
+    "mastitis": {
+      "specialist": "Маммолог",
+      "next_step": "Консультация маммолога",
+      "planned_step": "Уточняющая диагностика, терапия по показаниям",
+      "target_days": 3,
+      "priority": "urgent",
+      "priority_reason": "Воспалительные изменения требуют уточнения",
+      "department": "Координатор клинических маршрутов"
+    },
+    "breast_birads_high": {
+      "specialist": "Маммолог / онколог",
+      "next_step": "Консультация маммолога",
+      "planned_step": "Биопсия / дальнейший маршрут по BI-RADS",
+      "target_days": 3,
+      "priority": "urgent",
+      "priority_reason": "BI-RADS 3-5 — ускоренный онкологический маршрут",
+      "department": "Координатор хирургического маршрута"
+    },
+    "breast_mastopathy": {
+      "specialist": "Маммолог",
+      "next_step": "Консультация маммолога (определение тактики)",
+      "planned_step": "УЗИ в динамике, маммография по показаниям",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Доброкачественные диффузные изменения, плановое наблюдение",
+      "department": "Координатор клинических маршрутов"
+    },
+    "breast_cyst": {
+      "specialist": "Маммолог",
+      "next_step": "Консультация маммолога",
+      "planned_step": "УЗИ в динамике, пункция по показаниям",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Кистозные изменения, плановое наблюдение",
+      "department": "Координатор клинических маршрутов"
+    },
+    "breast_fibrosis": {
+      "specialist": "Маммолог",
+      "next_step": "Консультация маммолога",
+      "planned_step": "УЗИ в динамике",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Локальный фиброз, плановое наблюдение",
+      "department": "Координатор клинических маршрутов"
+    },
+    "thyroid_diffuse": {
+      "specialist": "Эндокринолог",
+      "next_step": "Консультация эндокринолога",
+      "planned_step": "Гормональный профиль, УЗИ в динамике",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Диффузные изменения, плановое наблюдение",
+      "department": "Координатор клинических маршрутов"
+    },
+    "cervical_changes": {
+      "specialist": "Гинеколог",
+      "next_step": "Консультация гинеколога (определение тактики)",
+      "planned_step": "Кольпоскопия, УЗИ в динамике",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Доброкачественные изменения шейки матки",
+      "department": "Координатор клинических маршрутов"
+    },
+    "cervical_polyp": {
+      "specialist": "Оперирующий гинеколог",
+      "next_step": "Консультация оперирующего гинеколога",
+      "planned_step": "Полипэктомия / гистероскопия по показаниям",
+      "target_days": 14,
+      "priority": "planned",
+      "priority_reason": "Полип шейки матки — плановая тактика",
+      "department": "Координатор хирургического маршрута"
+    },
+    "myometrium_changes": {
+      "specialist": "Гинеколог",
+      "next_step": "Консультация гинеколога (определение тактики)",
+      "planned_step": "УЗИ в динамике",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Диффузные изменения миометрия, наблюдение",
+      "department": "Координатор клинических маршрутов"
+    },
+    "endometrium_changes": {
+      "specialist": "Гинеколог",
+      "next_step": "Консультация гинеколога",
+      "planned_step": "Уточняющая диагностика (УЗИ в динамике, гистероскопия по показаниям)",
+      "target_days": 14,
+      "priority": "planned",
+      "priority_reason": "Изменения эндометрия требуют уточнения",
+      "department": "Координатор клинических маршрутов"
+    },
+    "multifollicular_ovaries": {
+      "specialist": "Гинеколог",
+      "next_step": "Консультация гинеколога",
+      "planned_step": "Гормональный профиль, УЗИ в динамике",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Мультифолликулярная структура яичников, наблюдение",
+      "department": "Координатор клинических маршрутов"
+    },
+    "pelvic_varicose": {
+      "specialist": "Гинеколог / флеболог",
+      "next_step": "Консультация гинеколога",
+      "planned_step": "УЗИ в динамике, терапия по показаниям",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Варикозное расширение вен малого таза, наблюдение",
+      "department": "Координатор клинических маршрутов"
+    },
+    "bph": {
+      "specialist": "Уролог",
+      "next_step": "Консультация уролога",
+      "planned_step": "Урофлоуметрия, оценка остаточной мочи, терапия/операция по показаниям",
+      "target_days": 14,
+      "priority": "planned",
+      "priority_reason": "ДГПЖ — плановая урологическая тактика",
+      "department": "Координатор клинических маршрутов"
+    },
+    "prostatitis": {
+      "specialist": "Уролог",
+      "next_step": "Консультация уролога",
+      "planned_step": "Дообследование, терапия по показаниям",
+      "target_days": 14,
+      "priority": "planned",
+      "priority_reason": "Диффузные изменения предстательной железы",
+      "department": "Координатор клинических маршрутов"
+    },
+    "prostate_calcification": {
+      "specialist": "Уролог",
+      "next_step": "Консультация уролога",
+      "planned_step": "Наблюдение, УЗИ в динамике",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Кальцинаты/фиброз — плановое наблюдение",
+      "department": "Координатор клинических маршрутов"
+    },
+    "prostate_cyst": {
+      "specialist": "Уролог",
+      "next_step": "Консультация уролога",
+      "planned_step": "Наблюдение, УЗИ в динамике",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Кистозные изменения предстательной железы",
+      "department": "Координатор клинических маршрутов"
+    },
+    "urinary_retention": {
+      "specialist": "Уролог",
+      "next_step": "Консультация уролога",
+      "planned_step": "Оценка пассажа мочи, дообследование",
+      "target_days": 7,
+      "priority": "planned",
+      "priority_reason": "Нарушение пассажа мочи требует уточнения",
+      "department": "Координатор клинических маршрутов"
+    },
+    "hepatomegaly": {
+      "specialist": "Гастроэнтеролог",
+      "next_step": "Консультация гастроэнтеролога",
+      "planned_step": "Дообследование, контроль в динамике",
+      "target_days": 14,
+      "priority": "planned",
+      "priority_reason": "Увеличение печени требует уточнения",
+      "department": "Координатор клинических маршрутов"
+    },
+    "hepatic_steatosis": {
+      "specialist": "Гастроэнтеролог",
+      "next_step": "Консультация гастроэнтеролога",
+      "planned_step": "Биохимия, УЗИ в динамике",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Диффузные изменения печени, наблюдение",
+      "department": "Координатор клинических маршрутов"
+    },
+    "liver_hemangioma": {
+      "specialist": "Гастроэнтеролог",
+      "next_step": "Консультация гастроэнтеролога",
+      "planned_step": "УЗИ в динамике",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Доброкачественное образование печени, наблюдение",
+      "department": "Координатор клинических маршрутов"
+    },
+    "pancreatic_changes": {
+      "specialist": "Гастроэнтеролог",
+      "next_step": "Консультация гастроэнтеролога",
+      "planned_step": "Биохимия, УЗИ в динамике",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Диффузные изменения поджелудочной железы, наблюдение",
+      "department": "Координатор клинических маршрутов"
+    },
+    "gallbladder_sludge": {
+      "specialist": "Гастроэнтеролог",
+      "next_step": "Консультация гастроэнтеролога",
+      "planned_step": "УЗИ в динамике",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Сладж/взвесь в желчном пузыре, наблюдение",
+      "department": "Координатор клинических маршрутов"
+    },
+    "cholecystitis": {
+      "specialist": "Гастроэнтеролог / хирург",
+      "next_step": "Консультация гастроэнтеролога",
+      "planned_step": "Уточняющая диагностика, решение о тактике",
+      "target_days": 14,
+      "priority": "planned",
+      "priority_reason": "Воспалительные изменения желчного пузыря",
+      "department": "Координатор клинических маршрутов"
+    },
+    "biliary_dyskinesia": {
+      "specialist": "Гастроэнтеролог",
+      "next_step": "Консультация гастроэнтеролога",
+      "planned_step": "УЗИ на голодный желудок, наблюдение",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Функциональные изменения желчного пузыря",
+      "department": "Координатор клинических маршрутов"
+    },
+    "kidney_cyst": {
+      "specialist": "Уролог",
+      "next_step": "Консультация уролога",
+      "planned_step": "УЗИ в динамике",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Кисты почек, плановое наблюдение",
+      "department": "Координатор клинических маршрутов"
+    },
+    "splenomegaly": {
+      "specialist": "Терапевт / гастроэнтеролог",
+      "next_step": "Консультация терапевта",
+      "planned_step": "Дообследование",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Изменения селезенки, наблюдение",
+      "department": "Координатор клинических маршрутов"
+    }
+  }
+}

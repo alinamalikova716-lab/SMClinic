@@ -1,0 +1,14 @@
+{
+  "version": "0.4",
+  "findings": 43,
+  "frozen_at": "2026-10-03T18:42:36",
+  "checksum": "58965e33dc98",
+  "files": {
+    "rules/triggers.json": "93d9bd00e7438dd3",
+    "rules/routing.json": "72d3ce063468fc4c",
+    "rules/uncertainty.json": "6a4e671362bb1c4f",
+    "app/processor.py": "04cc0f9dc242c3d8",
+    "web/app.py": "fef0c4ae3339e357",
+    "web/store.py": "1326f32d83a43e4d"
+  }
+}
