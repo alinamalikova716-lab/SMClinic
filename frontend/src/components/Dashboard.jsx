@@ -92,12 +92,12 @@ export default function Dashboard({ data }) {
           <div className="l">Срочных находок</div>
         </div>
         <div className="stat">
-          <div className="v">{data.by_status["booked"] || 0}</div>
+          <div className="v">{data.booked_count || 0}</div>
           <div className="l">Записались</div>
         </div>
         <div className="stat">
-          <div className="v">{data.by_status["followup"] || data.by_status["closed"] || 0}</div>
-          <div className="l">Дошли до контроля</div>
+          <div className="v">{data.visit_count || 0}</div>
+          <div className="l">Приём состоялся</div>
         </div>
       </div>
 

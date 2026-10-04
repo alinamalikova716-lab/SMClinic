@@ -98,7 +98,9 @@ export default function RouteDetail({ route, meta, now, onAction, pLabel }) {
           </div>
 
           <div className="panel">
-            <h3>Маршрут пациента</h3>
+            <h3>
+              Маршрут пациента {route.surgical === false && <span className="hint">— без госпитализации</span>}
+            </h3>
             <ul className="steps">
               {route.steps.map((s) => (
                 <li key={s.code} className={s.state}>

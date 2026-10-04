@@ -66,8 +66,16 @@ BOILERPLATE_MARKERS = [
 
 STATUS_PRIORITY = {"trigger": 0, "uncertain": 1, "negated": 2}
 
-# Признаки того, что протокол «понятный»: есть рекомендация/наблюдение.
-RECOMMENDATION_RE = re.compile(r"рекомендован|консультац|наблюдени|направлен|контроль|дообследован")
+# Признаки того, что протокол «понятный»: заключение, диагноз, код МКБ,
+# рекомендация врача. Если ничего из этого нет — вероятна ошибка оформления.
+UNDERSTANDABLE_RE = re.compile(
+    r"рекомендован|консультац|наблюдени|направлен|контроль|дообследован|"
+    r"в динамике|диагноз|\b[a-z]\d{2}\b"
+)
+
+# Порог от шума: если пометок «клинический риск» больше этой доли протоколов,
+# они считаются шумом и снимаются (guard из ТЗ).
+CLINICAL_RISK_SHARE_LIMIT = 0.05
 
 # Границы предложений: точка/!/? + пробел, либо перенос строки (п. 2.1).
 SENT_SPLIT = re.compile(r"(?<=[.!?])\s+|\n+")
@@ -128,6 +136,7 @@ class Finding:
     rule_version: str = ""
     in_conclusion: bool = False
     issue: str = ""
+    flag: str = ""  # structure | clinical (причина пометки «требует уточнения»)
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -241,6 +250,25 @@ def _guard_value(window: str, kind: str | None) -> int | None:
     return None
 
 
+def _base(token: str) -> str:
+    t = token.lower().strip()
+    return t[: max(4, len(t) - 2)] if len(t) > 5 else t
+
+
+def _mentioned(finding: Finding, patterns: list, conclusion: str) -> bool:
+    """Упомянута ли находка в заключении — по основе слова (формулировки/падежи)."""
+    if _base(finding.match) and _base(finding.match) in conclusion:
+        return True
+    for p in patterns:
+        if isinstance(p, dict):
+            p = p.get("text") or ""
+        if not p or not isinstance(p, str):
+            continue
+        if _base(p) and _base(p) in conclusion:
+            return True
+    return False
+
+
 # ── Извлечение ──────────────────────────────────────────────────────────────
 
 def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
@@ -250,6 +278,7 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
     clauses = _spans(norm, CLAUSE_SPLIT)
     concl_start = _conclusion_start(norm)
     has_concl = concl_start is not None
+    rule_patterns = {r["id"]: r.get("patterns", []) for r in triggers["findings"]}
 
     results: list[Finding] = []
 
@@ -338,14 +367,31 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
                     )
                 )
 
-    # «Требует уточнения» — «непонятный» протокол: есть находка, но заключение
-    # не распознано И нет рекомендации специалиста. Тогда протокол помечаем
-    # для проверки (маршрут и уведомление при этом всё равно создаются).
-    if results and not has_concl and not RECOMMENDATION_RE.search(norm):
-        for f in results:
-            if f.status != "negated":
-                f.status = "uncertain"
-                f.issue = "Заключение не распознано, рекомендация врача отсутствует — протокол требует проверки"
+    # Две независимые причины пометки «Требует уточнения»:
+    #  1) structure — ошибка оформления: нет заключения, диагноза и рекомендации;
+    #  2) clinical  — клинический риск: находка есть в описании, но не вынесена
+    #                 в заключение (в заключении нет ни одной находки из описания).
+    # Маршрут и уведомление пациенту при этом всё равно создаются.
+    if results:
+        if not has_concl and not UNDERSTANDABLE_RE.search(norm):
+            for f in results:
+                if f.status != "negated":
+                    f.status = "uncertain"
+                    f.flag = "structure"
+                    f.issue = "Нет заключения, диагноза и рекомендации — проверьте оформление протокола"
+        elif has_concl:
+            concl_norm = norm[concl_start:]
+            confirmed = any(
+                _mentioned(f, rule_patterns.get(f.id, []), concl_norm)
+                for f in results
+                if f.status != "negated"
+            )
+            if not confirmed:
+                for f in results:
+                    if f.status != "negated" and not f.in_conclusion:
+                        f.status = "uncertain"
+                        f.flag = "clinical"
+                        f.issue = "Находка описана в протоколе, но не вынесена в заключение"
 
     return results
 

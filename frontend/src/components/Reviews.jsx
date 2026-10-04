@@ -15,9 +15,9 @@ export default function Reviews({ reviews, onResolve, pLabel }) {
       <div className="audit-head">
         <h2>Требует уточнения</h2>
         <div className="sub">
-          Находка описана в тексте протокола, но отсутствует в заключении —
-          возможна ошибка автора протокола. Пациенту уведомление уже отправлено,
-          маршрут создан; здесь отмечается несогласованность для контроля качества.
+          Два независимых случая: <b>ошибка оформления</b> (нет заключения, диагноза и
+          рекомендации) и <b>находка не вынесена в заключение</b>. Пациенту уведомление
+          уже отправлено, маршрут создан; здесь фиксируется причина для проверки.
         </div>
       </div>
 
@@ -26,7 +26,9 @@ export default function Reviews({ reviews, onResolve, pLabel }) {
         return (
           <div className="review-card" key={rv.id}>
             <div className="rc-head">
-              <span className="prio prio-urgent">Требует уточнения</span>
+              <span className="prio prio-urgent">
+                {rv.finding.flag === "structure" ? "Ошибка оформления" : "Находка не в заключении"}
+              </span>
               <b>{rv.id}</b>
               <span className="rc-pat">
                 пациент {rv.patient?.id}

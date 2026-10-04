@@ -32,16 +32,54 @@ MONTHS = {
 }
 
 # Канонические шаги маршрута. Код -> (подпись, требуется ли для "хирургического" маршрута)
-STEPS = [
-    ("notification", "Уведомление пациенту отправлено (авто)"),
-    ("booked", "Запись к профильному специалисту"),
-    ("visit", "Приём состоялся"),
-    ("decision", "Врач определил тактику"),
-    ("hospital", "Направление на госпитализацию"),
-    ("hospital_date", "Госпитализация назначена"),
-    ("operated", "Операция выполнена"),
-    ("followup", "Контрольный визит"),
-]
+# Маршрут вариативный: не всем нужна госпитализация.
+#  · хирургический  — приём, тактика, направление, госпитализация, операция, контроль;
+#  · консервативный — приём, тактика, контрольный визит (без госпитализации).
+_STEP_TITLES = {
+    "notification": "Уведомление пациенту отправлено (авто)",
+    "booked": "Запись к профильному специалисту",
+    "visit": "Приём состоялся",
+    "decision": "Врач определил тактику",
+    "hospital": "Направление на госпитализацию",
+    "hospital_date": "Госпитализация назначена",
+    "operated": "Операция выполнена",
+    "followup": "Контрольный визит",
+}
+STEPS_SURGICAL = ["notification", "booked", "visit", "decision",
+                  "hospital", "hospital_date", "operated", "followup"]
+STEPS_CONSERVATIVE = ["notification", "booked", "visit", "decision", "followup"]
+
+SURGICAL_MARKERS = ("операц", "скопи", "эктоми", "резекц", "лапароскоп",
+                    "биопс", "дренир", "стентир", "трансплант")
+
+
+def is_surgical_route(route: dict) -> bool:
+    """Нужна ли маршруту госпитализация/операция — по запланированному шагу."""
+    text = f"{route.get('planned_step', '')} {route.get('next_step', '')}".lower()
+    return any(m in text for m in SURGICAL_MARKERS)
+
+
+def steps_for(route: dict) -> list[str]:
+    return STEPS_SURGICAL if is_surgical_route(route) else STEPS_CONSERVATIVE
+
+
+def next_action_for(step: str | None, surgical: bool) -> str:
+    if step in (None, "notification"):
+        return "book"
+    if step == "booked":
+        return "visit"
+    if step == "visit":
+        return "decision"
+    if step == "decision":
+        return "hospital" if surgical else "followup"
+    if step == "hospital":
+        return "hospital_date"
+    if step == "hospital_date":
+        return "operated"
+    if step == "operated":
+        return "followup"
+    return "close"
+
 
 NEXT_ACTION = {
     None: "book",
@@ -226,7 +264,7 @@ def _load_engine() -> list[dict]:
             "route": an["routes"][0] if an["routes"] else {},
             "all_routes": an["routes"],
             "status": "notification",
-            "urgent": bool(an["routes"] and an["routes"][0].get("urgent")),
+            "urgent": bool(an["routes"] and an["routes"][0].get("priority") in ("emergency", "urgent")),
             "created_at": (date + timedelta(minutes=2)).isoformat(),
             "due_at": (date + timedelta(days=an["routes"][0].get("target_days", 14))).isoformat()
             if an["routes"] else None,
@@ -312,7 +350,7 @@ def _load_labeled(path: str) -> list[dict]:
             "route": primary,
             "all_routes": routes_list,
             "status": "notification",
-            "urgent": bool(primary.get("urgent")),
+            "urgent": bool(primary.get("priority") in ("emergency", "urgent")),
             "created_at": (date + timedelta(minutes=2)).isoformat(),
             "due_at": (date + timedelta(days=primary.get("target_days", 14))).isoformat(),
             "step": "notification",
@@ -610,6 +648,7 @@ class Store:
             "date": r["source"]["date"],
             "trigger": r["triggers"][0]["title"] if r["triggers"] else "",
             "routes_count": len(r["all_routes"]),
+            "surgical": is_surgical_route(r["route"]),
             "specialist": r["route"].get("specialist", ""),
             "next_step": r["route"].get("next_step", ""),
             "status": r["status"],
@@ -637,18 +676,19 @@ class Store:
             "history": r["history"],
             "tasks": r["tasks"],
             "steps": self._steps(r),
-            "next_action": NEXT_ACTION.get(r["step"]) or NEXT_ACTION.get(None),
+            "next_action": next_action_for(r["step"], is_surgical_route(r["route"])),
+            "surgical": is_surgical_route(r["route"]),
         }
 
     def _steps(self, r: dict) -> list[dict]:
-        order = [s[0] for s in STEPS]
+        order = steps_for(r["route"])
         cur = r["step"]
         # "closed" -> всё выполнено
         cur_idx = len(order) if cur == "closed" else (order.index(cur) if cur in order else 0)
         out = []
-        for i, (code, label) in enumerate(STEPS):
+        for i, code in enumerate(order):
             state = "done" if i < cur_idx else ("current" if i == cur_idx else "pending")
-            out.append({"code": code, "label": label, "state": state})
+            out.append({"code": code, "label": _STEP_TITLES.get(code, code), "state": state})
         return out
 
     # ---------- действия ----------
@@ -754,7 +794,7 @@ class Store:
                 "route": rv["suggested_route"],
                 "all_routes": [rv["suggested_route"]],
                 "status": "notification",
-                "urgent": bool(rv["suggested_route"].get("urgent")),
+                "urgent": bool(rv["suggested_route"].get("priority") in ("emergency", "urgent")),
                 "created_at": (date + timedelta(minutes=2)).isoformat(),
                 "due_at": (date + timedelta(days=rv["suggested_route"].get("target_days", 14))).isoformat(),
                 "step": "notification",
@@ -815,7 +855,7 @@ class Store:
                 "route": primary,
                 "all_routes": routes_list,
                 "status": "notification",
-                "urgent": bool(primary.get("urgent")),
+                "urgent": bool(primary.get("priority") in ("emergency", "urgent")),
                 "created_at": (date + timedelta(minutes=2)).isoformat(),
                 "due_at": (date + timedelta(days=primary.get("target_days", 14))).isoformat(),
                 "step": "notification",
@@ -909,9 +949,14 @@ class Store:
             "now": self.now.isoformat(),
             "total": total,
             "protocols_total": self.protocols_total,
-            "urgent": sum(1 for r in self.routes if r["urgent"]),
+            "urgent": sum(
+                1 for r in self.routes
+                if r["route"].get("priority") in ("emergency", "urgent")
+            ),
             "by_status": by_status,
             "by_specialty": by_specialty,
+            "booked_count": cnt("booked", "visit", "decision", "hospital", "hospital_date", "operated", "followup", "closed"),
+            "visit_count": cnt("visit", "decision", "hospital", "hospital_date", "operated", "followup", "closed"),
             "funnel": funnel,
         }
 

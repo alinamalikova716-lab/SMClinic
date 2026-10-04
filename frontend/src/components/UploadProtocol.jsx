@@ -80,6 +80,12 @@ export default function UploadProtocol({ open, onClose, onCreated, onProcessed }
               <span>{result.protocol_id}</span>
             </div>
 
+            {result.anonymized > 0 && (
+              <div className="upl-anon">
+                ФИО пациента скрыто (замен: {result.anonymized})
+              </div>
+            )}
+
             <h4>Найденные находки</h4>
             {result.findings.length === 0 && <div className="upl-empty">Значимых находок не обнаружено.</div>}
             {result.findings.map((f, i) => (

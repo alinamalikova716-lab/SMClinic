@@ -26,8 +26,9 @@ button { font-family: inherit; cursor: pointer; }
 
 /* ---------- top bar ---------- */
 .topbar {
-  height: 64px; background: var(--navy); color: #fff;
-  display: flex; align-items: center; gap: 28px; padding: 0 20px;
+  height: 64px; background: #ffffff; color: var(--text);
+  border-bottom: 1px solid var(--line); box-shadow: 0 1px 8px rgba(16,26,43,.06);
+  display: flex; align-items: center; gap: 20px; padding: 0 20px;
   position: sticky; top: 0; z-index: 10;
 }
 .brand { display: flex; align-items: center; gap: 12px; }
@@ -35,19 +36,19 @@ button { font-family: inherit; cursor: pointer; }
   width: 38px; height: 38px; border-radius: 10px; background: var(--teal);
   color: #04241f; font-weight: 800; display: grid; place-items: center; font-size: 15px;
 }
-.brand-title { font-weight: 700; font-size: 15px; letter-spacing: .3px; }
+.brand-title { font-weight: 700; font-size: 16px; letter-spacing: .2px; color: #0e8a63; }
 .brand-logo { height: 38px; width: 38px; display: block; border-radius: 10px; }
-.brand-sub { font-size: 11.5px; color: #9fb0c6; }
-.tabs { display: flex; gap: 6px; margin-left: auto; }
+.brand-sub { font-size: 11.5px; color: var(--muted); }
+.tabs { display: flex; gap: 8px; margin-left: auto; }
 .tab {
-  background: transparent; border: 0; color: #9fb0c6; padding: 8px 14px;
-  border-radius: 8px; font-size: 13.5px;
+  background: #f4f6f9; border: 1px solid var(--line); color: #3c4a5a; padding: 9px 15px;
+  border-radius: 10px; font-size: 13.5px;
 }
-.tab:hover { background: rgba(255,255,255,.06); color: #fff; }
-.tab.active { background: rgba(0,179,154,.18); color: #fff; }
-.clock { display: flex; align-items: center; gap: 12px; }
-.clock-label { font-size: 11px; color: #8296b0; }
-.clock-value { font-variant-numeric: tabular-nums; font-weight: 600; }
+.tab:hover { background: #e9f7f1; color: #0e8a63; border-color: #bfe8de; }
+.tab.active { background: var(--teal); border-color: var(--teal); color: #fff; font-weight: 600; }
+.clock { display: flex; align-items: center; gap: 10px; }
+.clock-label { font-size: 11px; color: var(--muted); }
+.clock-value { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); }
 .clock-actions { display: flex; gap: 6px; margin-left: 6px; }
 .clock-actions button {
   background: rgba(255,255,255,.08); color: #dce6f2; border: 1px solid rgba(255,255,255,.12);
@@ -358,3 +359,5 @@ main { height: calc(100vh - 64px); }
 }
 .upl-saved { margin-top: 14px; background: #eefaf7; border: 1px solid #bfe8de; color: #04564a;
              border-radius: 10px; padding: 12px 14px; font-size: 13px; }
+.upl-anon { margin-top: 10px; background: #eaf7f1; border: 1px solid #bfe8de; color: #0e8a63;
+            border-radius: 10px; padding: 10px 12px; font-size: 12.5px; }

@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .store import STORE
+from app.anonymize import anonymize
 
 _NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
@@ -131,8 +132,14 @@ def resolve_review(rid: str, body: ResolveIn) -> dict:
 
 @app.post("/api/analyze")
 def analyze(body: AnalyzeIn) -> dict:
-    """Принимает текст протокола -> находки + маршрут (контракт docs/api_contract.md)."""
-    return STORE.ingest(body.text, body.protocol_id, body.study_type)
+    """Принимает текст протокола -> находки + маршрут (контракт docs/api_contract.md).
+
+    Текст предварительно обезличивается: персональные данные не сохраняются.
+    """
+    text, removed = anonymize(body.text)
+    res = STORE.ingest(text, body.protocol_id, body.study_type)
+    res["anonymized"] = removed
+    return res
 
 
 @app.post("/api/analyze-file")
@@ -147,7 +154,10 @@ async def analyze_file(file: UploadFile = File(...)) -> dict:
         text = docx_text_from_bytes(data)
     else:
         text = data.decode("utf-8", "replace")
-    return STORE.ingest(text, name)
+    text, removed = anonymize(text)  # обезличивание до сохранения и анализа
+    res = STORE.ingest(text, name)
+    res["anonymized"] = removed
+    return res
 
 
 # Отдача собранного интерфейса (React): logo.svg, favicon и прочие файлы сборки.

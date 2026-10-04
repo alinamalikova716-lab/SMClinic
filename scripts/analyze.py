@@ -13,7 +13,7 @@ from collections import Counter, defaultdict
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, HERE)
 
-from app.processor import load_rules, process  # noqa: E402
+from app.processor import CLINICAL_RISK_SHARE_LIMIT, load_rules, process  # noqa: E402
 
 DATA = os.path.join(HERE, "data")
 IN = os.path.join(DATA, "protocols.jsonl")
@@ -43,6 +43,28 @@ def main() -> None:
             examples.setdefault(f["id"], proto["id"])
         for f in res["uncertain"]:
             per_uncertain[f"{f['title']}"] += 1
+
+    # Guard от шума: если пометок «клинический риск» больше порога — снимаем их.
+    total = len(results)
+    clinical_prots = {
+        r["id"] for r in results
+        if any(f.get("flag") == "clinical" for f in r["analysis"]["uncertain"])
+    }
+    if total and len(clinical_prots) / total > CLINICAL_RISK_SHARE_LIMIT:
+        print(f"ВНИМАНИЕ: пометок 'клинический риск' {len(clinical_prots)} "
+              f"({len(clinical_prots) / total:.0%}) > порога {CLINICAL_RISK_SHARE_LIMIT:.0%} — сняты как шум")
+        for rec in results:
+            an = rec["analysis"]
+            for f in an["findings"]:
+                if f.get("flag") == "clinical":
+                    f["status"], f["flag"], f["issue"] = "trigger", "", ""
+            an["uncertain"] = [f for f in an["uncertain"] if f.get("flag") != "clinical"]
+            an["reviews"] = [rv for rv in an["reviews"] if rv["finding"].get("flag") != "clinical"]
+
+    per_uncertain = Counter()
+    for rec in results:
+        for f in rec["analysis"]["uncertain"]:
+            per_uncertain[f["title"]] += 1
 
     with open(OUT, "w", encoding="utf-8") as fh:
         for rec in results:
