@@ -614,7 +614,7 @@ class Store:
     # ---------- чтение ----------
     def list_routes(self, status: str | None = None, urgent: bool | None = None,
                     specialty: str | None = None, priority: str | None = None,
-                    q: str | None = None) -> list[dict]:
+                    role: str = "coordinator", q: str | None = None) -> list[dict]:
         out = []
         for r in self.routes:
             if status and r["status"] != status:
@@ -623,7 +623,23 @@ class Store:
                 continue
             if priority and r["route"].get("priority", "planned") != priority:
                 continue
-            if specialty and r["route"].get("specialist") != specialty:
+            # Ролевой доступ (фильтрация на сервере, не в интерфейсе)
+            if role == "doctor":
+                # профильный врач — только пациенты, направленные к его специальности
+                if specialty and r["route"].get("specialist") != specialty:
+                    continue
+            elif role == "surgeon":
+                # хирург — только после решения врача об оперативном лечении
+                if not is_surgical_route(r["route"]):
+                    continue
+                if r["step"] not in ("decision", "hospital", "hospital_date",
+                                     "operated", "followup", "closed"):
+                    continue
+            elif role == "oncologist":
+                # онколог — только явное направление в онкологический маршрут
+                if "онколог" not in r["route"].get("specialist", "").lower():
+                    continue
+            if specialty and role != "doctor" and r["route"].get("specialist") != specialty:
                 continue
             if q:
                 hay = f"{r['id']} {r['patient']['id']} {r['source']['study']} " \

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { advanceTime, getDashboard, getMeta, getNormals, getReviews, getRoute, getRoutes, resolveReview, sendAction } from "./api.js";
+import { advanceTime, getDashboard, getLlmStatus, getMeta, getNormals, getReviews, getRoute, getRoutes, resolveReview, sendAction } from "./api.js";
 import { fmtDate, pLabel as makePLabel } from "./lib/util.js";
 import Queue from "./components/Queue.jsx";
 import RouteDetail from "./components/RouteDetail.jsx";
@@ -7,6 +7,7 @@ import Dashboard from "./components/Dashboard.jsx";
 import UploadProtocol from "./components/UploadProtocol.jsx";
 import Reviews from "./components/Reviews.jsx";
 import Normals from "./components/Normals.jsx";
+import Login, { ROLES } from "./components/Login.jsx";
 
 export default function App() {
   const [meta, setMeta] = useState(null);
@@ -19,6 +20,15 @@ export default function App() {
   const [normals, setNormals] = useState([]);
   const [toast, setToast] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [llm, setLlm] = useState(null);
+  const [user, setUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem("smclinic_user");
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
 
   const [search, setSearch] = useState("");
   const [priority, setPriority] = useState("");
@@ -40,12 +50,14 @@ export default function App() {
     const params = new URLSearchParams();
     if (search.trim()) params.set("q", search.trim());
     if (priority) params.set("priority", priority);
-    if (specialty) params.set("specialty", specialty);
+    const spec = user?.role === "doctor" ? user.specialty : specialty;
+    if (spec) params.set("specialty", spec);
+    params.set("role", user?.role || "coordinator");
     const data = await getRoutes(params);
     setRoutes(data.routes);
     setNow(data.now);
     if (autoSelect && data.routes.length) select(data.routes[0].id);
-  }, [search, priority, specialty]);
+  }, [search, priority, specialty, user]);
 
   const select = useCallback(async (id) => {
     const r = await getRoute(id);
@@ -84,6 +96,17 @@ export default function App() {
   const refreshAux = useCallback(async () => {
     await Promise.all([loadReviews(), loadNormals()]);
   }, [loadReviews, loadNormals]);
+
+  const login = useCallback((u) => {
+    localStorage.setItem("smclinic_user", JSON.stringify(u));
+    setUser(u);
+  }, []);
+
+  const logout = useCallback(() => {
+    localStorage.removeItem("smclinic_user");
+    setUser(null);
+    setCurrent(null);
+  }, []);
 
   const switchTab = useCallback(
     async (name) => {
@@ -126,11 +149,21 @@ export default function App() {
   useEffect(() => {
     (async () => {
       setMeta(await getMeta());
+      try {
+        setLlm(await getLlmStatus());
+      } catch {
+        setLlm(null);
+      }
       await loadReviews();
-      await loadRoutes(true);
+      if (user) await loadRoutes(true);
       firstLoad.current = false;
     })();
   }, []);
+
+  // при смене пользователя перечитываем доступные ему маршруты
+  useEffect(() => {
+    if (user && !firstLoad.current) loadRoutes(true);
+  }, [user]);
 
   // перезагрузка списка при смене фильтров (поиск — с задержкой)
   useEffect(() => {
@@ -139,12 +172,28 @@ export default function App() {
     return () => clearTimeout(t);
   }, [search, priority, specialty]);
 
+  if (!meta) {
+    return <div className="login-wrap"><div className="login-card">Загрузка…</div></div>;
+  }
+  if (!user) {
+    return <Login specialties={meta.specialties || []} onLogin={login} />;
+  }
+
   return (
     <>
       <header className="topbar">
         <div className="brand">
           <img className="brand-logo" src="/logo.svg" alt="" />
           <div className="brand-title">СМ-Клиника</div>
+        </div>
+        <div className="user-box">
+          <div>
+            <div className="user-name">{user?.name || ROLES[user?.role] || "—"}</div>
+            <div className="user-role">
+              {ROLES[user?.role]}{user?.specialty ? ` · ${user.specialty}` : ""}
+            </div>
+          </div>
+          <button className="btn" onClick={logout}>Сменить</button>
         </div>
         <nav className="tabs">
           <button className={"tab" + (tab === "routes" ? " active" : "")} onClick={() => switchTab("routes")}>
@@ -168,6 +217,12 @@ export default function App() {
           <span className="clock-label">Местное время</span>
           <span className="clock-value">{fmtDate(now)}</span>
         </div>
+        {llm?.enabled && (
+          <span className={"llm-badge " + (llm.available ? "ok" : "err")}
+                title={llm.error || "локальная модель"}>
+            LLM: {llm.model}{llm.available ? " · локально" : " · недоступна"}
+          </span>
+        )}
       </header>
 
       <main>

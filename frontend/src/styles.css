@@ -300,6 +300,39 @@ main { height: calc(100vh - 64px); }
 }
 .btn-upload:hover { background: #41d6bd; }
 
+.role-select {
+  background: #f4f6f9; border: 1px solid var(--line); color: #3c4a5a;
+  padding: 9px 12px; border-radius: 10px; font-size: 13px;
+}
+.user-box { display: flex; align-items: center; gap: 10px; }
+.user-name { font-weight: 600; font-size: 13px; }
+.user-role { font-size: 11px; color: var(--muted); }
+
+/* экран входа в личный кабинет */
+.login-wrap {
+  min-height: 100vh; display: grid; place-items: center;
+  background: linear-gradient(160deg, #eef7f4, #f4f6f9);
+}
+.login-card {
+  width: 360px; background: #fff; border: 1px solid var(--line); border-radius: 16px;
+  padding: 26px; box-shadow: 0 10px 40px rgba(16,26,43,.08);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.login-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.login-label { font-size: 12px; color: var(--muted); margin-top: 8px; }
+.login-card select, .login-card input[type="text"] {
+  padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 13.5px;
+  background: #fbfcfe; width: 100%;
+}
+.login-btn { margin-top: 16px; }
+.login-hint { font-size: 11.5px; color: var(--muted); margin-top: 12px; line-height: 1.5; }
+.llm-badge {
+  font-size: 11px; padding: 4px 9px; border-radius: 8px; white-space: nowrap;
+  background: #eef2f7; color: #5a6675; border: 1px solid var(--line);
+}
+.llm-badge.ok { background: #e9f7f1; color: #0e8a63; border-color: #bfe8de; }
+.llm-badge.err { background: #fff7e6; color: #8a6100; border-color: #f2dfb2; }
+
 .rules-badge {
   margin-left: 8px; font-size: 10.5px; color: #7fd8c6; background: rgba(0,179,154,.14);
   border: 1px solid rgba(0,179,154,.3); border-radius: 6px; padding: 1px 7px;

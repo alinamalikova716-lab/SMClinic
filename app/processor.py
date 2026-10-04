@@ -41,10 +41,11 @@ NEGATION_CUES = [
     "нет данных", "не получено",
 ]
 
-# «нет <патологии>» — только с существительным-мишенью.
+# «нет <патологии>» и «без … изменений» — только с существительным-мишенью.
 NO_FINDING_RE = re.compile(
-    r"\bнет\s+(признак|данных|образован|узл|кист|конкремент|патолог|"
-    r"изменен|атеросклеротическ)"
+    r"\bнет\s+(признак|данных|образован|узл|кист|конкремент|патолог|изменен|атеросклеротическ)"
+    r"|\bбез\s+(?:эхографически\s+|эхо\s+|значимых\s+|убедительных\s+|достоверных\s+|"
+    r"явных\s+|видимых\s+|структурных\s+)*(?:изменени|патолог|образовани|признак|данных|особенност)"
 )
 
 # Дисклеймеры и «хвосты» заключений — вырезаем до конца строки (п. 2.5).
@@ -136,7 +137,8 @@ class Finding:
     rule_version: str = ""
     in_conclusion: bool = False
     issue: str = ""
-    flag: str = ""  # structure | clinical (причина пометки «требует уточнения»)
+    flag: str = ""  # structure | clinical | limited (причина «требует уточнения»)
+    limited: bool = False  # ограничение оценки/визуализации рядом с находкой
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -274,6 +276,14 @@ def _mentioned(finding: Finding, patterns: list, conclusion: str) -> bool:
 
 # ── Извлечение ──────────────────────────────────────────────────────────────
 
+def _uncertainty_markers(uncertainty: dict) -> list[str]:
+    """Маркеры неопределённости («нельзя исключить», «подозрение на» и т.п.)."""
+    markers = list(uncertainty.get("strong", []))
+    if uncertainty.get("weak_enabled"):
+        markers += list(uncertainty.get("weak", []))
+    return [_norm(m) for m in markers]
+
+
 def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
     text = _strip_boilerplate(text)
     norm = _norm(text)
@@ -283,6 +293,8 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
     has_concl = concl_start is not None
     rule_patterns = {r["id"]: r.get("patterns", []) for r in triggers["findings"]}
     rule_meta = {r["id"]: r for r in triggers["findings"]}
+    markers = _uncertainty_markers(uncertainty)
+    limited_markers = [_norm(m) for m in uncertainty.get("limited_assessment", [])]
 
     results: list[Finding] = []
 
@@ -344,8 +356,13 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
                 no_finding = NO_FINDING_RE.search(window)
                 negated = bool(cue) or bool(no_finding)
 
+                marker = next((m for m in markers if m in window), "")
+                limited = any(m in window for m in limited_markers)
+
+                # «Нельзя исключить», «подозрение на» и ограничение оценки —
+                # это ТРИГГЕР: находку видит врач, он и поставит диагноз.
                 if not excepted and negated:
-                    status, confidence = "negated", 0.55
+                    status, confidence, marker = "negated", 0.55, ""
                 else:
                     status, confidence = "trigger", 0.9
                     cue = ""
@@ -366,10 +383,11 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
                             **_extract_attributes(window, rule.get("attributes", [])),
                             "laterality": _section_of(norm, start),
                         },
-                        marker="",
+                        marker=marker,
                         negation_cue=cue or (no_finding.group(0) if no_finding else ""),
                         rule_version=triggers["version"],
                         in_conclusion=in_concl,
+                        limited=limited,
                     )
                 )
 
@@ -381,7 +399,7 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
     if results:
         if not has_concl and not UNDERSTANDABLE_RE.search(norm):
             for f in results:
-                if f.status != "negated":
+                if f.status != "negated" and not f.marker:
                     f.status = "uncertain"
                     f.flag = "structure"
                     f.issue = "Нет заключения, диагноза и рекомендации — проверьте оформление протокола"
@@ -394,18 +412,21 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
             )
             if not confirmed:
                 for f in results:
-                    if f.status != "negated" and not f.in_conclusion:
+                    # находка со сформированным сомнением («нельзя исключить») — триггер,
+                    # в уточнение не переводим
+                    if f.status != "negated" and not f.in_conclusion and not f.marker:
                         f.status = "uncertain"
                         f.flag = "clinical"
                         f.issue = "Находка описана в протоколе, но не вынесена в заключение"
 
-    # Для молочной железы BI-RADS имеет приоритет: категории 1–2 маршрут не создают.
+    # Для молочной железы BI-RADS 1–2 маршрут не создают.
+    # BI-RADS 0 (нужна дополнительная оценка) и 3–5 — значимы.
     birads_all = [int(v) for v in re.findall(r"bi[\s-]?rads[^0-9]{0,15}(\d)", norm)]
-    if birads_all and max(birads_all) <= 2:
+    if birads_all and all(v in (1, 2) for v in birads_all):
         for f in results:
             if rule_meta.get(f.id, {}).get("group") == "breast" and f.status != "negated":
                 f.status = "negated"
-                f.negation_cue = f"BI-RADS {max(birads_all)} — 1–2 не является триггером"
+                f.negation_cue = "BI-RADS 1–2 — сам по себе не создаёт маршрут"
 
     # Фоновые находки (independent=false) не создают маршрут, если в той же группе
     # (органе) нет клинически значимой находки. Само слово «киста/фиброз/мастопатия»
@@ -428,14 +449,29 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
 
     # Если в заключении прямо сказано «патологии не выявлено» — протокол норма,
     # фоновые описания находкой не считаются.
+    # Если в заключении прямо сказано «патологии не выявлено» — протокол норма,
+    # фоновые описания находкой не считаются. Но если есть значимая находка
+    # (BI-RADS/TI-RADS 3 и выше), заключение не считается нормой.
     if has_concl:
         concl_norm = norm[concl_start:]
-        if re.search(r"патологии[^\n.]{0,40}не выявлен|без патологии|"
-                     r"патологических изменений[^\n.]{0,40}не выявлен|"
-                     r"структурных изменений[^\n.]{0,40}не выявлен|"
-                     r"признаков патологии[^\n.]{0,40}не", concl_norm):
+        has_significant = any(
+            (lambda v: bool(v) and max(v) >= 3)(
+                f.attributes.get("birads") or f.attributes.get("tirads") or []
+                if isinstance(f.attributes.get("birads") or f.attributes.get("tirads") or [], list)
+                else [f.attributes.get("birads") or f.attributes.get("tirads")]
+            )
+            for f in results
+        )
+        # «Нельзя исключить» в заключении означает, что заключение не является нормой.
+        concl_has_doubt = any(m in concl_norm for m in markers)
+        if not has_significant and not concl_has_doubt and re.search(
+            r"патологии[^\n.]{0,40}не выявлен|без патологии|"
+            r"патологических изменений[^\n.]{0,40}не выявлен|"
+            r"структурных изменений[^\n.]{0,40}не выявлен|"
+            r"признаков патологии[^\n.]{0,40}не", concl_norm
+        ):
             for f in results:
-                if f.status != "negated":
+                if f.status != "negated" and not f.marker:
                     f.status = "negated"
                     f.negation_cue = "заключение: патологии не выявлено"
 
@@ -507,7 +543,7 @@ def process(text: str, triggers: dict, routing: dict, uncertainty: dict) -> dict
         {"finding": f.to_dict(), "suggested_route": _suggested_route(f, routing)}
         for f in uncertain
     ]
-    return {
+    result = {
         "findings": [f.to_dict() for f in findings],
         "triggers": [f.to_dict() for f in triggers_found],
         "uncertain": [f.to_dict() for f in uncertain],
@@ -515,3 +551,11 @@ def process(text: str, triggers: dict, routing: dict, uncertainty: dict) -> dict
         "reviews": reviews,
         "is_trigger": bool(triggers_found),
     }
+    # Shadow-LLM: извлекает факты параллельно, но НЕ влияет на маршрут/приоритет.
+    try:
+        from app.llm_extractor import shadow_result
+
+        result["llm"] = shadow_result(text)
+    except Exception:  # noqa: BLE001 — без LLM система обязана работать
+        result["llm"] = {"enabled": False, "error": "llm module unavailable"}
+    return result

@@ -75,13 +75,23 @@ def meta() -> dict:
 @app.get("/api/routes")
 def routes(status: str | None = None, urgent: bool | None = None,
            specialty: str | None = None, priority: str | None = None,
-           q: str | None = None) -> dict:
+           role: str = "coordinator", q: str | None = None) -> dict:
     return {
         "now": STORE.now.isoformat(),
+        "role": role,
         "routes": STORE.list_routes(
-            status=status, urgent=urgent, specialty=specialty, priority=priority, q=q
+            status=status, urgent=urgent, specialty=specialty,
+            priority=priority, role=role, q=q,
         ),
     }
+
+
+@app.get("/api/llm/status")
+def llm_status() -> dict:
+    """Диагностика локальной LLM. Медицинский текст не выводится."""
+    from app.llm_extractor import health
+
+    return health()
 
 
 @app.get("/api/routes/{rid}")

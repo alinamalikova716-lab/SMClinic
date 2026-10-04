@@ -35,3 +35,6 @@ export const resolveReview = (id, decision) =>
 
 // Протоколы без значимых находок
 export const getNormals = () => api("/api/normals");
+
+// Диагностика локальной LLM
+export const getLlmStatus = () => api("/api/llm/status");
