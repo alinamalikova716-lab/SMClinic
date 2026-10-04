@@ -6,10 +6,13 @@
   2) routing     — что с этим делать (детерминированные правила по матрице).
 
 Статусы находки:
-  trigger   — находка подтверждена  -> создаёт маршрут;
-  uncertain — реально противоречивая формулировка («нельзя исключить») ->
-              маршрут НЕ создаётся автоматически, уходит в очередь «Требует уточнения»;
-  negated   — находка отрицается    -> маршрута нет.
+  trigger  — находка подтверждена -> создаёт маршрут;
+  negated  — находка отрицается  -> маршрута нет.
+
+Решение по формулировкам «нельзя исключить / подозрение на» (п. 1.5 ТЗ):
+они считаются ЯВНЫМ ТРИГГЕРОМ — врач на приёме поставит диагноз.
+Статус `uncertain` из логики выведен; раздел «Требует уточнения» оставлен
+для будущих сценариев (протоколы без заключения и без рекомендаций).
 
 Правила лежат в rules/*.json и являются настройками, а не хардкодом.
 """
@@ -24,6 +27,9 @@ from typing import Any
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RULES = os.path.join(HERE, "rules")
 
+# ── Отрицания ───────────────────────────────────────────────────────────────
+# Только осмысленные обороты. Голое «нет » убрано (п. 1.3) — заменено
+# регексом NO_FINDING_RE, который требует существительное-мишень.
 NEGATION_CUES = [
     "не выявлен", "не выявляется", "не определяется", "не определяются",
     "не обнаружен", "не лоциру", "не визуализир",
@@ -32,17 +38,20 @@ NEGATION_CUES = [
     "не отмеч", "не характерн", "не нарушен", "не зафиксирован",
     "без признак", "без образован", "без изменен", "без особенност",
     "без патологии", "без стеноз", "без смещен", "отсутств",
-    "нет данных", "не получено", "нет ",
+    "нет данных", "не получено",
 ]
 
-# Дисклеймеры и «хвосты» заключений. Их надо убрать ДО разбора: фразы вида
-# «данное заключение не является диагнозом» иначе дают ложное отрицание
-# найденной рядом патологии.
+# «нет <патологии>» — только с существительным-мишенью.
+NO_FINDING_RE = re.compile(
+    r"\bнет\s+(признак|данных|образован|узл|кист|конкремент|патолог|"
+    r"изменен|атеросклеротическ)"
+)
+
+# Дисклеймеры и «хвосты» заключений — вырезаем до конца строки (п. 2.5).
 BOILERPLATE_MARKERS = [
     "не является диагнозом",
     "не является клиническим диагнозом",
     "не является окончательным",
-    "не является диагнозом",
     "сохраняйте протокол",
     "предъявляйте врач",
     "интерпретир",
@@ -55,12 +64,21 @@ BOILERPLATE_MARKERS = [
     "пациент имеет возможность",
 ]
 
-# Приоритет статуса при слиянии повторов одной находки.
 STATUS_PRIORITY = {"trigger": 0, "uncertain": 1, "negated": 2}
 
-SENT_SPLIT = re.compile(r"(?<=[.!?;:])\s+|\n+")
-CLAUSE_SPLIT = re.compile(r"[,;:()\-–—]|\n+")
-PARA_SPLIT = re.compile(r"\n\s*\n")
+# Признаки того, что протокол «понятный»: есть рекомендация/наблюдение.
+RECOMMENDATION_RE = re.compile(r"рекомендован|консультац|наблюдени|направлен|контроль|дообследован")
+
+# Границы предложений: точка/!/? + пробел, либо перенос строки (п. 2.1).
+SENT_SPLIT = re.compile(r"(?<=[.!?])\s+|\n+")
+# Клаузы: запятая, точка с запятой, двоеточие, тире, перенос строки (п. 1.4).
+CLAUSE_SPLIT = re.compile(r"[,;:—–]|\n+")
+
+# Маркеры сторон для определения латеральности (п. 1.1).
+_RIGHT_MARKERS = ["правая молочная", "правая доля", "правый яичник", "правое яичко",
+                  "справа", "правая", "правой", "правого", "правым", "правый"]
+_LEFT_MARKERS = ["левая молочная", "левая доля", "левый яичник", "левое яичко",
+                 "слева", "левая", "левой", "левого", "левым", "левый"]
 
 
 def _norm(text: str) -> str:
@@ -70,28 +88,11 @@ def _norm(text: str) -> str:
 
 
 def _strip_boilerplate(text: str) -> str:
-    """Вырезает только сам дисклеймер, не трогая находки.
-
-    Находка и дисклеймер часто склеены без пробела/точки
-    («...конкрементов желчного пузыря.Заключение не является диагнозом»),
-    поэтому нельзя выбрасывать предложение целиком — иначе теряется находка.
-    Режем от маркера до конца предложения: текст ДО маркера сохраняется.
-    """
+    """Вырезает дисклеймер до конца строки (точку не трогаем — п. 2.5)."""
     cleaned = text
     for m in BOILERPLATE_MARKERS:
-        cleaned = re.sub(rf"{re.escape(m)}[^.!?\n]*[.!?]?", " ", cleaned, flags=re.I)
+        cleaned = re.sub(rf"{re.escape(m)}[^\n]*", " ", cleaned, flags=re.I)
     return cleaned
-
-
-def sentences(norm_text: str) -> list[tuple[int, int]]:
-    """Границы предложений. Строим через finditer, чтобы покрытие было без «дыр»."""
-    spans: list[tuple[int, int]] = []
-    start = 0
-    for m in SENT_SPLIT.finditer(norm_text):
-        spans.append((start, m.start()))
-        start = m.end()
-    spans.append((start, len(norm_text)))
-    return [(a, b) for a, b in spans if b > a]
 
 
 def _spans(norm_text: str, splitter: re.Pattern) -> list[tuple[int, int]]:
@@ -111,31 +112,22 @@ def _enclosing(spans: list[tuple[int, int]], pos: int) -> tuple[int, int] | None
     return None
 
 
-_norm_cache = ""
-
-
-def _sentence_of(spans: list[tuple[int, int]], start: int) -> str:
-    for a, b in spans:
-        if a <= start < b:
-            return _norm_cache[a:b]
-    return ""
-
-
 @dataclass
 class Finding:
     id: str
     title: str
     domain: str
     severity: str
-    status: str  # trigger | uncertain | negated
+    status: str  # trigger | negated
     confidence: float
     evidence: str
     match: str
     attributes: dict[str, Any] = field(default_factory=dict)
-    marker: str = ""  # маркер формулировки (информативно)
+    marker: str = ""
+    negation_cue: str = ""  # какая фраза погасила находку (п. 3.3)
     rule_version: str = ""
-    in_conclusion: bool = True  # найдено ли в заключении
-    issue: str = ""  # причина пометки «требует уточнения»
+    in_conclusion: bool = False
+    issue: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -153,25 +145,32 @@ def load_rules() -> tuple[dict, dict, dict]:
     return triggers, routing, uncertainty
 
 
-def _uncertainty_markers(uncertainty: dict) -> list[str]:
-    markers = list(uncertainty.get("strong", []))
-    if uncertainty.get("weak_enabled"):
-        markers += list(uncertainty.get("weak", []))
-    return [_norm(m) for m in markers]
+# ── Определение сторон и заключения ─────────────────────────────────────────
+
+def _section_of(norm_text: str, pos: int) -> str:
+    """right / left / unknown — по последней шапке секции перед находкой (п. 1.1)."""
+    r = max((norm_text.rfind(m, 0, pos) for m in _RIGHT_MARKERS), default=-1)
+    l = max((norm_text.rfind(m, 0, pos) for m in _LEFT_MARKERS), default=-1)
+    if r < 0 and l < 0:
+        return "unknown"
+    if r > l:
+        return "right"
+    if l > r:
+        return "left"
+    return "unknown"
 
 
-ZAKL_RE = re.compile(r"заключени[ея]", re.I)
-
-# Обороты, которые НЕ являются заголовком заключения (дисклеймеры и хвосты).
+_ZAKL_WORD = re.compile(r"заключени[ея]", re.I)
+# Заголовок заключения: слово + двоеточие/тире/перенос, либо «ЗАКЛЮЧЕНИЕ ИССЛЕДОВАНИЯ».
+_ZAKL_HEADER = re.compile(r"заключени[ея]\s*(?:исследования)?\s*[:\-—–\n]|^\s*заключени[ея]\s*$", re.I | re.M)
 _NOT_A_HEADER = ("данное заключение", "заключение не является", "заключение является",
                  "заключение носит", "результаты узи", "результаты ультразвукового")
 
 
 def _conclusion_start(norm_text: str) -> int | None:
-    """Позиция начала содержательного заключения (последний настоящий заголовок)
-    или None, если заключения в протоколе нет."""
+    """Позиция заголовка содержательного заключения (последнего) или None (п. 2.2)."""
     best = None
-    for m in ZAKL_RE.finditer(norm_text):
+    for m in _ZAKL_HEADER.finditer(norm_text):
         head = norm_text[m.start(): m.start() + 60]
         if "не является" in head or "не являются" in head:
             continue
@@ -181,28 +180,30 @@ def _conclusion_start(norm_text: str) -> int | None:
     return best
 
 
+# ── Атрибуты ────────────────────────────────────────────────────────────────
+
 def _extract_attributes(window: str, wanted: list[str]) -> dict[str, Any]:
     attrs: dict[str, Any] = {}
     if "size" in wanted:
         m = re.search(r"\d+[.,]?\d*\s*(?:х|x|\*)\s*\d+[.,]?\d*(?:\s*(?:х|x|\*)\s*\d+[.,]?\d*)?\s*мм", window)
+        if not m:
+            m = re.search(r"до\s*\d+[.,]?\d*\s*мм", window)
+        if not m:
+            m = re.search(r"\d+[.,]?\d*\s*мм", window)  # одиночный размер (п. 2.4)
         if m:
             attrs["size"] = m.group(0).strip()
-        else:
-            m = re.search(r"до\s*\d+[.,]?\d*\s*мм", window)
-            if m:
-                attrs["size"] = m.group(0).strip()
     if "endometrium_thickness" in wanted:
         m = re.search(r"эндометрия[:\s]+(\d+[.,]?\d*)\s*мм", window)
         if m:
             attrs["endometrium_thickness_mm"] = m.group(1)
     if "birads" in wanted:
-        m = re.search(r"bi[\s-]?rads[^0-9]{0,15}(\d)", window)
-        if m:
-            attrs["birads"] = int(m.group(1))
+        vals = re.findall(r"bi[\s-]?rads[^0-9]{0,15}(\d)", window)
+        if vals:
+            attrs["birads"] = sorted({int(v) for v in vals})
     if "tirads" in wanted:
-        m = re.search(r"ti[\s-]?rads[^0-9]{0,15}(\d)", window)
-        if m:
-            attrs["tirads"] = int(m.group(1))
+        vals = re.findall(r"ti[\s-]?rads[^0-9]{0,15}(\d)", window)
+        if vals:
+            attrs["tirads"] = sorted({int(v) for v in vals})
     if "count" in wanted:
         if "множественн" in window:
             attrs["count"] = "множественные"
@@ -212,12 +213,10 @@ def _extract_attributes(window: str, wanted: list[str]) -> dict[str, Any]:
 
 
 def _make_quote(text: str, sa: int, sb: int, start: int, end: int, max_len: int = 320) -> str:
-    """Цитата = целое предложение с находкой. Не режем по символам,
-    чтобы не рвать слова; длинное предложение обрезаем по границам слов."""
     quote = text[sa:sb].strip()
     if len(quote) <= max_len:
         return quote
-    rel = start - sa  # позиция находки внутри предложения
+    rel = start - sa
     half = max_len // 2
     left = max(0, rel - half)
     right = min(len(quote), left + max_len)
@@ -232,33 +231,7 @@ def _make_quote(text: str, sa: int, sb: int, start: int, end: int, max_len: int 
     return frag.strip()
 
 
-def _base(token: str) -> str:
-    t = token.lower().strip()
-    return t[: max(4, len(t) - 2)] if len(t) > 5 else t
-
-
-def _mentioned(finding: Finding, patterns: list, conclusion: str) -> bool:
-    """Упомянута ли находка в заключении — по основе слова, без точного совпадения."""
-    if _base(finding.match) and _base(finding.match) in conclusion:
-        return True
-    for p in patterns:
-        if isinstance(p, dict):
-            p = p.get("text") or ""
-        if not p or not isinstance(p, str):
-            continue
-        b = _base(p)
-        if b and b in conclusion:
-            return True
-    return False
-
-
-# Находки, которые считаются «дополнительными изменениями»: если они есть
-# в описании, но не упомянуты в заключении — протокол идёт в «Требует уточнения».
-EXTRA_FINDINGS = {"lymphadenopathy", "pelvic_varicose", "ovarian_enlargement", "biliary_dyskinesia"}
-
-
 def _guard_value(window: str, kind: str | None) -> int | None:
-    """Числовое значение для проверки условия (например, категория BI-RADS)."""
     if kind == "birads":
         m = re.search(r"bi[\s-]?rads[^0-9]{0,15}(\d)", window)
         return int(m.group(1)) if m else None
@@ -268,17 +241,16 @@ def _guard_value(window: str, kind: str | None) -> int | None:
     return None
 
 
+# ── Извлечение ──────────────────────────────────────────────────────────────
+
 def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
-    global _norm_cache
     text = _strip_boilerplate(text)
     norm = _norm(text)
-    _norm_cache = norm
-    sents = sentences(norm)
+    sents = _spans(norm, SENT_SPLIT)
+    clauses = _spans(norm, CLAUSE_SPLIT)
     concl_start = _conclusion_start(norm)
     has_concl = concl_start is not None
-    has_concl_trigger = False
-    markers = _uncertainty_markers(uncertainty)
-    rule_patterns = {r["id"]: r.get("patterns", []) for r in triggers["findings"]}
+
     results: list[Finding] = []
 
     for rule in triggers["findings"]:
@@ -292,15 +264,15 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
                 guard = pattern.get("guard")
             else:
                 regex = re.escape(_norm(pattern))
+
             for m in re.finditer(regex, norm):
                 start, end = m.start(), m.end()
-                # границы предложения: отрицание/неопределённость ищем только внутри
                 sent_span = _enclosing(sents, start)
                 if sent_span is None:
                     continue
                 sa, sb = sent_span
 
-                # require_context: контекстное слово рядом (окно настраивается правилом)
+                # require_context — орган рядом (окно настраивается правилом)
                 req = rule.get("require_context")
                 if req:
                     cw = rule.get("context_window", 200)
@@ -308,8 +280,7 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
                     if not any(_norm(w) in cwindow for w in req):
                         continue
 
-                # exclude_context: обороты, при которых совпадение не является
-                # патологией (например, «нестенозирующий атеросклероз»).
+                # exclude_context — обороты, которые не являются патологией
                 exc = rule.get("exclude_context")
                 if exc:
                     ew = rule.get("exclude_window", 30)
@@ -317,35 +288,34 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
                     if any(_norm(w) in ewindow for w in exc):
                         continue
 
-                # отрицание/неопределённость и атрибуты — внутри предложения
-                lo = max(sa, start - 80)
-                hi = min(sb, end + 80)
+                # клауза находки — окно для негации (п. 1.4)
+                clause = _enclosing(clauses, start)
+                if clause and clause[1] - clause[0] >= 15:
+                    lo, hi = clause
+                else:
+                    lo, hi = sa, sb  # слишком короткая клауза — берём предложение
                 window = norm[lo:hi]
 
-                # числовое условие паттерна (например, BI-RADS только 3-5)
+                # числовое условие паттерна: min/max (п. 2.3)
                 if guard:
                     val = _guard_value(window, guard.get("kind"))
-                    if val is not None and val < guard.get("min", 0):
+                    if val is not None and (val < guard.get("min", 0) or val > guard.get("max", 99)):
                         continue
 
-                # «нельзя исключить <патологию>» — это ЯВНЫЙ ТРИГГЕР (врач поставит диагноз),
-                # поэтому маркер неопределённости больше не переводит находку в «уточнение».
-                marker = next((mk for mk in markers if mk in window), "")
                 exceptions = [_norm(e) for e in uncertainty.get("negation_exceptions", [])]
                 excepted = any(e in window for e in exceptions)
 
-                # отрицание: обороты «не выявлено/без признаков…» + «без <патологии>» перед находкой
-                before = norm[max(sa, start - 25):start]
-                negated = any(cue in window for cue in NEGATION_CUES) or ("без" in before)
+                cue = next((c for c in NEGATION_CUES if c in window), "")
+                no_finding = NO_FINDING_RE.search(window)
+                negated = bool(cue) or bool(no_finding)
 
                 if not excepted and negated:
                     status, confidence = "negated", 0.55
                 else:
                     status, confidence = "trigger", 0.9
+                    cue = ""
 
                 in_concl = bool(has_concl) and start >= concl_start
-                if in_concl:
-                    has_concl_trigger = True
 
                 results.append(
                     Finding(
@@ -357,47 +327,77 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
                         confidence=confidence,
                         evidence=_make_quote(text, sa, sb, start, end),
                         match=text[start:end],
-                        attributes=_extract_attributes(window, rule.get("attributes", [])),
-                        marker=marker,
+                        attributes={
+                            **_extract_attributes(window, rule.get("attributes", [])),
+                            "laterality": _section_of(norm, start),
+                        },
+                        marker="",
+                        negation_cue=cue or (no_finding.group(0) if no_finding else ""),
                         rule_version=triggers["version"],
                         in_conclusion=in_concl,
                     )
                 )
 
-    # Находка описана в протоколе, но отсутствует в заключении —
-    # вероятна ошибка автора протокола. Маршрут (и пуш) всё равно создаём,
-    # но помечаем для координатора в разделе «Требует уточнения».
-    # Если заключение не распознано, но в тексте есть рекомендация специалиста —
-    # это не повод для «уточнения» (протокол понятный). Поэтому здесь ничего не помечаем.
+    # «Требует уточнения» — «непонятный» протокол: есть находка, но заключение
+    # не распознано И нет рекомендации специалиста. Тогда протокол помечаем
+    # для проверки (маршрут и уведомление при этом всё равно создаются).
+    if results and not has_concl and not RECOMMENDATION_RE.search(norm):
+        for f in results:
+            if f.status != "negated":
+                f.status = "uncertain"
+                f.issue = "Заключение не распознано, рекомендация врача отсутствует — протокол требует проверки"
 
     return results
 
 
+def _merge_attributes(a: dict, b: dict) -> dict:
+    merged = dict(a)
+    for k, v in b.items():
+        if k in merged and merged[k] != v:
+            merged.setdefault("_alt", {})[k] = v
+        else:
+            merged[k] = v
+    return merged
+
+
 def dedupe(findings: list[Finding]) -> list[Finding]:
-    """Одна находка могла встретиться несколько раз с разными статусами.
-    Приоритет: подтверждено > неопределённо > отрицается."""
+    """Слияние повторов по (id, laterality) — двусторонние находки не схлопываются (п. 1.1)."""
     best: dict[str, Finding] = {}
     for f in findings:
-        cur = best.get(f.id)
+        key = f"{f.id}|{f.attributes.get('laterality', 'unknown')}"
+        cur = best.get(key)
         if cur is None:
-            best[f.id] = f
+            best[key] = f
             continue
         if STATUS_PRIORITY[f.status] < STATUS_PRIORITY[cur.status]:
-            best[f.id] = f
+            f.attributes = _merge_attributes(cur.attributes, f.attributes)
+            best[key] = f
         elif f.status == cur.status and f.confidence > cur.confidence:
-            best[f.id] = f
+            f.attributes = _merge_attributes(cur.attributes, f.attributes)
+            best[key] = f
+        else:
+            cur.attributes = _merge_attributes(cur.attributes, f.attributes)
     return list(best.values())
 
 
 def route(findings: list[Finding], routing: dict) -> list[dict]:
+    order = {"emergency": 0, "urgent": 1, "planned": 2, "watch": 3}
     out = []
     for f in findings:
         if f.status not in ("trigger", "uncertain"):
             continue
-        r = routing["routes"].get(f.id, routing["default"])
+        r = dict(routing["routes"].get(f.id, routing["default"]))
+        # BI-RADS/TI-RADS: берём максимальную категорию (п. 1.2)
+        for key in ("birads", "tirads"):
+            vals = f.attributes.get(key)
+            if vals is None:
+                continue
+            vals = vals if isinstance(vals, list) else [vals]
+            if vals and max(vals) >= 4:
+                r["priority"] = "urgent"
+                r["target_days"] = min(int(r.get("target_days", 3)), 3)
+                r["priority_reason"] = (r.get("priority_reason", "") + f" ({key.upper()} ≥4)").strip()
         out.append({"finding_id": f.id, "title": f.title, **r})
-    # срочные — первыми
-    order = {"emergency": 0, "urgent": 1, "planned": 2, "watch": 3}
     out.sort(key=lambda x: order.get(x.get("priority", "planned"), 9))
     return out
 
@@ -408,19 +408,13 @@ def _suggested_route(f: Finding, routing: dict) -> dict:
 
 
 def process(text: str, triggers: dict, routing: dict, uncertainty: dict) -> dict:
-    raw = extract(text, triggers, uncertainty)
-    findings = dedupe(raw)
+    findings = dedupe(extract(text, triggers, uncertainty))
     triggers_found = [f for f in findings if f.status in ("trigger", "uncertain")]
     uncertain = [f for f in findings if f.status == "uncertain"]
-
     reviews = [
-        {
-            "finding": f.to_dict(),
-            "suggested_route": _suggested_route(f, routing),
-        }
+        {"finding": f.to_dict(), "suggested_route": _suggested_route(f, routing)}
         for f in uncertain
     ]
-
     return {
         "findings": [f.to_dict() for f in findings],
         "triggers": [f.to_dict() for f in triggers_found],
