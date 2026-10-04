@@ -33,4 +33,4 @@ def anonymize(text: str) -> tuple[str, int]:
     for pattern, repl in _RULES:
         clean, n = pattern.subn(repl, clean)
         removed += n
-    return clean, removed
+    return clean, removed #
