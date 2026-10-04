@@ -181,7 +181,10 @@ def _conclusion_start(norm_text: str) -> int | None:
     best = None
     for m in _ZAKL_HEADER.finditer(norm_text):
         head = norm_text[m.start(): m.start() + 60]
+        prefix = norm_text[max(0, m.start() - 12):m.start()]
         if "не является" in head or "не являются" in head:
+            continue
+        if "данное" in prefix or "результаты" in prefix:
             continue
         if any(head.startswith(b) for b in _NOT_A_HEADER):
             continue
@@ -279,6 +282,7 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
     concl_start = _conclusion_start(norm)
     has_concl = concl_start is not None
     rule_patterns = {r["id"]: r.get("patterns", []) for r in triggers["findings"]}
+    rule_meta = {r["id"]: r for r in triggers["findings"]}
 
     results: list[Finding] = []
 
@@ -320,9 +324,11 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
                 # клауза находки — окно для негации (п. 1.4)
                 clause = _enclosing(clauses, start)
                 if clause and clause[1] - clause[0] >= 15:
-                    lo, hi = clause
+                    # клауза, но строго внутри предложения — иначе отрицание
+                    # из соседнего предложения гасит валидную находку
+                    lo, hi = max(clause[0], sa), min(clause[1], sb)
                 else:
-                    lo, hi = sa, sb  # слишком короткая клауза — берём предложение
+                    lo, hi = sa, sb
                 window = norm[lo:hi]
 
                 # числовое условие паттерна: min/max (п. 2.3)
@@ -392,6 +398,46 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
                         f.status = "uncertain"
                         f.flag = "clinical"
                         f.issue = "Находка описана в протоколе, но не вынесена в заключение"
+
+    # Для молочной железы BI-RADS имеет приоритет: категории 1–2 маршрут не создают.
+    birads_all = [int(v) for v in re.findall(r"bi[\s-]?rads[^0-9]{0,15}(\d)", norm)]
+    if birads_all and max(birads_all) <= 2:
+        for f in results:
+            if rule_meta.get(f.id, {}).get("group") == "breast" and f.status != "negated":
+                f.status = "negated"
+                f.negation_cue = f"BI-RADS {max(birads_all)} — 1–2 не является триггером"
+
+    # Фоновые находки (independent=false) не создают маршрут, если в той же группе
+    # (органе) нет клинически значимой находки. Само слово «киста/фиброз/мастопатия»
+    # при BI-RADS 1–2 маршрут не открывает.
+    groups: dict[str, list] = {}
+    for f in results:
+        g = rule_meta.get(f.id, {}).get("group")
+        if g:
+            groups.setdefault(g, []).append(f)
+    for fs in groups.values():
+        has_independent = any(
+            rule_meta.get(f.id, {}).get("independent", True) and f.status == "trigger"
+            for f in fs
+        )
+        if not has_independent:
+            for f in fs:
+                if not rule_meta.get(f.id, {}).get("independent", True) and f.status != "negated":
+                    f.status = "negated"
+                    f.negation_cue = "фоновое изменение без клинически значимого признака"
+
+    # Если в заключении прямо сказано «патологии не выявлено» — протокол норма,
+    # фоновые описания находкой не считаются.
+    if has_concl:
+        concl_norm = norm[concl_start:]
+        if re.search(r"патологии[^\n.]{0,40}не выявлен|без патологии|"
+                     r"патологических изменений[^\n.]{0,40}не выявлен|"
+                     r"структурных изменений[^\n.]{0,40}не выявлен|"
+                     r"признаков патологии[^\n.]{0,40}не", concl_norm):
+            for f in results:
+                if f.status != "negated":
+                    f.status = "negated"
+                    f.negation_cue = "заключение: патологии не выявлено"
 
     return results
 

@@ -113,6 +113,8 @@
       "domain": "Маммология",
       "severity": "planned",
       "patterns": ["фиброаденома", "очаговое образование", "образование молочной железы", "объемное образование"],
+      "group": "breast",
+      "independent": true,
       "attributes": ["size"]
     },
     {
@@ -124,6 +126,8 @@
         { "text": "bi-rads", "guard": { "kind": "birads", "min": 3 } },
         { "text": "bi rads", "guard": { "kind": "birads", "min": 3 } }
       ],
+      "group": "breast",
+      "independent": true,
       "attributes": ["size", "birads"]
     },
     {
@@ -134,6 +138,8 @@
       "patterns": ["мастопати", "кистозн", "диффузн", "жировая инволюци", "изменения"],
       "require_context": ["молочн", "м/ж", "мж", "мамм"],
       "exclude_context": ["мелкокистозн"],
+      "group": "breast",
+      "independent": false,
       "attributes": []
     },
     {
@@ -143,6 +149,8 @@
       "severity": "watch",
       "patterns": ["фиброз"],
       "require_context": ["молочн", "м/ж", "мж"],
+      "group": "breast",
+      "independent": false,
       "attributes": []
     },
     {
@@ -152,6 +160,8 @@
       "severity": "watch",
       "patterns": [{ "regex": "кист(а|ы|е|у|ой|ами)\\b" }],
       "require_context": ["молочн", "м/ж", "мж"],
+      "group": "breast",
+      "independent": false,
       "attributes": ["size"]
     },
     {
@@ -216,7 +226,7 @@
       "title": "Дискинезия желчного пузыря",
       "domain": "Гастроэнтерология",
       "severity": "watch",
-      "patterns": ["дискинези", "гипомоторн", "гипермоторн"],
+      "patterns": ["дискинези", "гипомоторн", "гипермоторн", "загиб", "перегиб"],
       "require_context": ["желчн", "пузыр"],
       "attributes": []
     },
@@ -377,7 +387,7 @@
       "domain": "Сосудистая хирургия",
       "severity": "watch",
       "patterns": ["стенозирующий атеросклероз", "стеноз", "атеросклероз", "атеросклеротическ", "бляшк"],
-      "exclude_context": ["нестенозиру", "незначим", "не получено", "значимых атеросклеротических бляшек"],
+      "exclude_context": ["незначим", "значимых атеросклеротических бляшек"],
       "attributes": []
     },
     {

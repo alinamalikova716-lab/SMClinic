@@ -63,6 +63,30 @@ show("без-патологии", r)
 if r["triggers"]:
     print("   ✗ «без признаков» не должно быть триггером"); ok = False
 
+# п.8 — бизнес-логика молочной железы и BI-RADS
+BREAST = "УЗИ молочных желез. "
+
+
+def expect(name, text, want_trigger):
+    r = run(text)
+    show(name, r)
+    got = r["is_trigger"]
+    if got != want_trigger:
+        print(f"   ✗ ожидалось {'trigger' if want_trigger else 'нет trigger'}")
+        return False
+    return True
+
+
+ok &= expect("BI-RADS 1", BREAST + "Заключение: уз-признаков патологии не выявлено. "
+             "Категория BI-RADS 1 (правая молочная железа). Категория BI-RADS 1 (левая).", False)
+ok &= expect("BI-RADS 2 + киста/фиброз", BREAST + "В правой молочной железе определяется киста 6 мм, "
+             "участок фиброза. Заключение: фиброзно-кистозная мастопатия, BI-RADS 2.", False)
+ok &= expect("BI-RADS 3", BREAST + "Справа молочная железа. Заключение: образование, BI-RADS 3.", True)
+ok &= expect("BI-RADS 4", BREAST + "Слева молочная железа. Заключение: BI-RADS 4.", True)
+ok &= expect("BI-RADS 5", BREAST + "Слева молочная железа. Заключение: BI-RADS 5.", True)
+ok &= expect("образований не выявлено", BREAST + "Заключение: объемных образований не выявлено. BI-RADS 2.", False)
+ok &= expect("после маммопластики Br2", BREAST + "Заключение: состояние после маммопластики Br2.", False)
+
 print()
 print("ИТОГ:", "все проверки пройдены" if ok else "есть ошибки")
 sys.exit(0 if ok else 1)

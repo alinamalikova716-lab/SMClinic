@@ -155,7 +155,7 @@ export default function App() {
             {reviews.length > 0 && <span className="tab-badge">{reviews.length}</span>}
           </button>
           <button className={"tab" + (tab === "normals" ? " active" : "")} onClick={() => switchTab("normals")}>
-            Без патологий
+            Без клинических значимых триггеров
           </button>
           <button className={"tab" + (tab === "dashboard" ? " active" : "")} onClick={() => switchTab("dashboard")}>
             Статистика

@@ -138,7 +138,7 @@ export default function UploadProtocol({ open, onClose, onCreated, onProcessed }
             )}
 
             {result.saved_to === "norm" && (
-              <div className="upl-saved">Значимых находок нет — протокол сохранён в блок «Без патологий».</div>
+              <div className="upl-saved">Значимых находок нет — протокол сохранён в блок «Без клинических значимых триггеров».</div>
             )}
 
             <div className="upl-actions">
