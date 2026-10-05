@@ -278,8 +278,7 @@ def _load_engine() -> list[dict]:
             {
                 "at": route["created_at"],
                 "event": "trigger_detected",
-                "label": f"Выявлена находка: {an['triggers'][0]['title']}"
-                if an["triggers"] else "Триггер",
+                "label": _trigger_label(an["triggers"][0]) if an["triggers"] else "Триггер",
             }
         )
         routes.append(route)
@@ -363,7 +362,7 @@ def _load_labeled(path: str) -> list[dict]:
             {
                 "at": route["created_at"],
                 "event": "trigger_detected",
-                "label": f"Выявлена находка: {trig[0]['title']}",
+                "label": _trigger_label(trig[0]),
             }
         )
         routes.append(route)
@@ -486,6 +485,14 @@ def _conclusion(text: str, limit: int = 300) -> str:
             continue
         best = frag
     return best or " ".join(text[-limit:].split())
+
+
+def _trigger_label(trig: dict) -> str:
+    """Подпись события маршрута: рекомендация врача — не «находка»."""
+    title = trig.get("title", "Триггер")
+    if trig.get("id") == "doctor_recommendation":
+        return title
+    return f"Выявлена находка: {title}"
 
 
 def _load_normals() -> list[dict]:
@@ -956,7 +963,7 @@ class Store:
                     {
                         "at": date.isoformat(),
                         "event": "trigger_detected",
-                        "label": f"Выявлена находка: {res['triggers'][0]['title']}",
+                        "label": _trigger_label(res["triggers"][0]),
                     }
                 ],
                 "notifications": [],

@@ -81,6 +81,34 @@ BOILERPLATE_MARKERS = [
     "пациент имеет возможность",
 ]
 
+
+# Рекомендация врача — самостоятельный сигнал: «Рекомендовано: консультация маммолога».
+# Открывает плановый маршрут, даже если клинически значимых находок нет.
+# Общие формулировки («консультация специалиста», «профильного специалиста»)
+# намеренно не срабатывают — иначе это шум.
+_RECOMMENDATION_SPECIALISTS = [
+    ("маммолог", "Маммолог"),
+    ("гинеколог", "Гинеколог"),
+    ("гастроэнтеролог", "Гастроэнтеролог"),
+    ("эндокринолог", "Эндокринолог"),
+    ("уролог", "Уролог"),
+    ("нефролог", "Нефролог"),
+    ("флеболог", "Сосудистый хирург (флеболог)"),
+    ("сосудист", "Сосудистый хирург"),
+    ("кардиолог", "Кардиолог"),
+    ("невролог", "Невролог"),
+    ("пульмонолог", "Пульмонолог"),
+    ("офтальмолог", "Офтальмолог"),
+    ("окулист", "Офтальмолог"),
+    ("дерматолог", "Дерматолог"),
+    ("ревматолог", "Ревматолог"),
+    ("гематолог", "Гематолог"),
+    ("терапевт", "Терапевт"),
+    ("онколог", "Маммолог / онколог"),
+    ("хирург", "Хирург"),
+]
+_REC_SPLIT = re.compile(r"(?<=[.!?])\s+|\n+")
+
 STATUS_PRIORITY = {"trigger": 0, "uncertain": 1, "negated": 2}
 
 # Признаки того, что протокол «понятный»: заключение, диагноз, код МКБ,
@@ -705,6 +733,29 @@ def _suggested_route(f: Finding, routing: dict) -> dict:
     return {"finding_id": f.id, "title": f.title, **r}
 
 
+def _doctor_recommendation(text: str) -> tuple[str, str, str] | None:
+    """Явная рекомендация консультации конкретного специалиста в тексте.
+
+    Возвращает (специалист, цитата, фрагмент) или None. Учитываются только
+    предложения с «рекоменд…» и «консультац…», где назван известный специалист.
+    """
+    cleaned = _strip_boilerplate(text)
+    for sentence in _REC_SPLIT.split(cleaned):
+        s = sentence.strip()
+        if not s:
+            continue
+        ns = _norm(s)
+        if "рекоменд" not in ns:
+            continue
+        if "консультац" not in ns and "конс." not in ns:
+            continue
+        for stem, name in _RECOMMENDATION_SPECIALISTS:
+            i = ns.find(stem)
+            if i != -1:
+                return name, s[:240], s[max(0, i - 12): i + len(stem) + 6]
+    return None
+
+
 def process(text: str, triggers: dict, routing: dict, uncertainty: dict) -> dict:
     findings = dedupe(extract(text, triggers, uncertainty))
     triggers_found = [f for f in findings if f.status in ("trigger", "uncertain")]
@@ -728,4 +779,42 @@ def process(text: str, triggers: dict, routing: dict, uncertainty: dict) -> dict
         result["llm"] = shadow_result(text)
     except Exception:  # noqa: BLE001 — без LLM система обязана работать
         result["llm"] = {"enabled": False, "error": "llm module unavailable"}
+
+    # Рекомендация врача открывает маршрут, если клинических маршрутов нет.
+    if not result["routes"]:
+        rec = _doctor_recommendation(text)
+        if rec:
+            specialist, evidence, match = rec
+            rf = Finding(
+                id="doctor_recommendation",
+                title=f"Рекомендация врача: консультация ({specialist})",
+                domain="Маршрутизация",
+                severity="planned",
+                status="trigger",
+                confidence=0.6,
+                evidence=evidence,
+                match=match,
+                attributes={
+                    "specialist": specialist,
+                    "source": "recommendation",
+                    "laterality": "unknown",
+                },
+                rule_version=triggers["version"],
+                in_conclusion=True,
+            )
+            result["findings"].append(rf.to_dict())
+            result["triggers"].append(rf.to_dict())
+            result["routes"].append({
+                "finding_id": "doctor_recommendation",
+                "title": rf.title,
+                "specialist": specialist,
+                "next_step": f"Консультация: {specialist}",
+                "planned_step": "Запись на консультацию по рекомендации врача",
+                "target_days": 14,
+                "priority": "planned",
+                "priority_reason": "В заключении есть рекомендация врача о консультации специалиста",
+                "department": "Координатор клинических маршрутов",
+            })
+            result["is_trigger"] = True
+
     return result
