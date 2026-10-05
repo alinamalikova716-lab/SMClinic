@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { advanceTime, getDashboard, getLlmStatus, getMeta, getNormals, getReviews, getRoute, getRoutes, resolveReview, sendAction } from "./api.js";
+import { advanceTime, getDashboard, getLlmStatus, getMeta, getNormals, getReviews, getRoute, getRoutes, resolveReview, rollbackRoute, sendAction } from "./api.js";
 import { fmtDate, pLabel as makePLabel } from "./lib/util.js";
 import Queue from "./components/Queue.jsx";
 import RouteDetail from "./components/RouteDetail.jsx";
@@ -67,13 +67,37 @@ export default function App() {
   const doAction = useCallback(
     async (action) => {
       if (!current) return;
-      const updated = await sendAction(current.id, action);
+      const updated = await sendAction(current.id, action, user?.role || "coordinator");
       setCurrent(updated);
       showToast(actionLabel(action));
       await loadRoutes();
     },
-    [current, loadRoutes, showToast, meta]
+    [current, loadRoutes, showToast, meta, user]
   );
+
+  const doRollback = useCallback(async () => {
+    if (!current) return;
+    const role = user?.role || "coordinator";
+    const prev = await rollbackRoute(current.id, role, false, true);
+    if (prev.error) {
+      showToast(prev.error);
+      return;
+    }
+    const deps = (prev.later_steps || []).map((s) => s.label);
+    let msg = `Вернуть пациента на предыдущий этап?\n${prev.from_label} → ${prev.to_label}`;
+    if (deps.length) {
+      msg += `\n\nВместе с ним будут отменены зависимые этапы:\n• ${deps.join("\n• ")}`;
+    }
+    if (!window.confirm(msg)) return;
+    const res = await rollbackRoute(current.id, role, true);
+    if (res.error) {
+      showToast(res.error);
+      return;
+    }
+    setCurrent(res);
+    showToast("Статус возвращён на предыдущий этап");
+    await loadRoutes();
+  }, [current, loadRoutes, showToast, user]);
 
   const advance = useCallback(
     async (hours) => {
@@ -238,10 +262,11 @@ export default function App() {
             specialty={specialty}
             setSpecialty={setSpecialty}
             specialties={meta?.specialties || []}
+            showSpecialty={user?.role !== "doctor"}
             pLabel={pLabel}
             now={now}
           />
-          <RouteDetail route={current} meta={meta} now={now} onAction={doAction} pLabel={pLabel} />
+          <RouteDetail route={current} meta={meta} now={now} onAction={doAction} onRollback={doRollback} pLabel={pLabel} />
         </section>
 
         <section className={"view view-page" + (tab === "reviews" ? " active" : "")}>

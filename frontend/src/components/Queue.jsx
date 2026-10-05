@@ -11,6 +11,7 @@ export default function Queue({
   specialty,
   setSpecialty,
   specialties,
+  showSpecialty = true,
   pLabel,
   now,
 }) {
@@ -32,6 +33,7 @@ export default function Queue({
             <option value="planned">Планово</option>
             <option value="watch">Наблюдение</option>
           </select>
+          {showSpecialty && (
           <select value={specialty} onChange={(e) => setSpecialty(e.target.value)}>
             <option value="">Все специальности</option>
             {specialties.map((s) => (
@@ -40,6 +42,7 @@ export default function Queue({
               </option>
             ))}
           </select>
+          )}
         </div>
         <div className="queue-stats">
           Маршрутов: <b>{routes.length}</b> · срочных: <b>{urgent}</b>

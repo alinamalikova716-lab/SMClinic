@@ -108,6 +108,11 @@ _BILATERAL_MARKERS = [
     "обеих долях", "обеих молочных", "обоих яичниках",
     "с двух сторон", "с обеих сторон", "двусторонн", "билатеральн",
 ]
+# Перешеек — это не сторона: узел в перешейке не получает left/right.
+_ISTHMUS_MARKERS = [
+    "перешеек", "перешейк", "в области перешейка",
+    "в перешейке", "область перешейка",
+]
 
 
 def _norm(text: str) -> str:
@@ -135,6 +140,20 @@ TYPO_MAP = {
     "глотоании": "глотании",
     "железщ": "железы",
     "отсуств": "отсутств",
+    # расширенный словарь опечаток
+    "ассиметричн": "асимметричн",
+    "двухсторонн": "двусторонн",
+    "гетерогенн": "гетерогенн",
+    "поликистозн": "поликистозн",
+    "предстет": "предстат",
+    "щитовидки": "щитовидной",
+    "локализуется": "лоцируется",
+    "лоцируют": "лоцируется",
+    "лоцировано": "лоцируется",
+    "гипоэхогенное": "гипоэхогенное",
+    "изоэхогенное": "изоэхогенное",
+    # защита: «лоцируются» после замены выше не должно превращаться в «лоцируетсяся»
+    "лоцируетсяся": "лоцируются",
 }
 
 
@@ -199,10 +218,25 @@ def load_rules() -> tuple[dict, dict, dict]:
 
 # ── Определение сторон и заключения ─────────────────────────────────────────
 
+def _sentence_text(norm_text: str, pos: int) -> str:
+    """Предложение, содержащее позицию pos."""
+    for a, b in _spans(norm_text, SENT_SPLIT):
+        if a <= pos < b:
+            return norm_text[a:b]
+    return norm_text
+
+
 def _section_of(norm_text: str, pos: int, match: str = "", window: int = 40) -> str:
-    """right / left / bilateral / unknown.
-    Сначала смотрим в сам match, потом в узкое окно ±window и берём БЛИЖАЙШИЙ маркер."""
+    """right / left / bilateral / isthmus / unknown.
+    Перешеек — не сторона. Иначе: сначала в самом совпадении, затем в предложении
+    (обе стороны -> bilateral), затем по ближайшему маркеру в узком окне."""
     m = (match or "").lower()
+    if any(w in m for w in _ISTHMUS_MARKERS):
+        return "isthmus"
+    local_pre = norm_text[max(0, pos - window): pos + len(match or "") + window]
+    if any(w in local_pre for w in _ISTHMUS_MARKERS):
+        return "isthmus"
+
     if any(w in m for w in _BILATERAL_MARKERS):
         return "bilateral"
     r_in = any(w in m for w in _RIGHT_MARKERS)
@@ -214,11 +248,17 @@ def _section_of(norm_text: str, pos: int, match: str = "", window: int = 40) -> 
     if l_in:
         return "left"
 
+    # Стороны в предложении: если присутствуют обе — находка двусторонняя.
+    sentence = _sentence_text(norm_text, pos)
+    s_b = any(w in sentence for w in _BILATERAL_MARKERS)
+    s_r = any(w in sentence for w in _RIGHT_MARKERS)
+    s_l = any(w in sentence for w in _LEFT_MARKERS)
+    if s_b or (s_r and s_l):
+        return "bilateral"
+
     lo = max(0, pos - window)
     hi = min(len(norm_text), pos + len(match or "") + window)
     local = norm_text[lo:hi]
-    if any(w in local for w in _BILATERAL_MARKERS):
-        return "bilateral"
 
     def nearest(markers: list[str]) -> int | None:
         best = None
@@ -331,6 +371,17 @@ def _guard_value(window: str, kind: str | None) -> int | float | None:
         return int(m.group(1)) if m else None
     if kind == "vein_mm":
         m = re.search(r"(\d+[.,]?\d*)\s*мм", window)
+        return float(m.group(1).replace(",", ".")) if m else None
+    if kind == "size_mm":
+        m = re.search(r"(\d+[.,]?\d*)\s*(?:х|x|\*)\s*(\d+[.,]?\d*)", window)
+        if m:
+            a = float(m.group(1).replace(",", "."))
+            b = float(m.group(2).replace(",", "."))
+            return max(a, b)
+        m = re.search(r"(\d+[.,]?\d*)\s*мм", window)
+        return float(m.group(1).replace(",", ".")) if m else None
+    if kind == "volume_ml":
+        m = re.search(r"(\d+[.,]?\d*)\s*см", window)
         return float(m.group(1).replace(",", ".")) if m else None
     return None
 

@@ -43,6 +43,13 @@ if USE_DIST:
 
 class ActionIn(BaseModel):
     action: str
+    role: str = "coordinator"
+
+
+class RollbackIn(BaseModel):
+    role: str = "coordinator"
+    force: bool = False
+    preview: bool = False
 
 
 class AdvanceIn(BaseModel):
@@ -104,10 +111,18 @@ def route(rid: str) -> dict:
 
 @app.post("/api/routes/{rid}/action")
 def action(rid: str, body: ActionIn) -> dict:
-    r = STORE.act(rid, body.action)
+    r = STORE.act(rid, body.action, role=body.role)
     if r is None:
         raise HTTPException(404, "route not found")
     return r
+
+
+@app.post("/api/routes/{rid}/rollback")
+def rollback(rid: str, body: RollbackIn) -> dict:
+    res = STORE.rollback(rid, role=body.role, force=body.force, preview=body.preview)
+    if res is None:
+        raise HTTPException(404, "route not found")
+    return res
 
 
 @app.post("/api/simulate/advance")

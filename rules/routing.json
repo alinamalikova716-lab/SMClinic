@@ -430,13 +430,31 @@
       "priority_reason": "Деформация ЖП сама по себе маршрут не создаёт",
       "department": "Координатор клинических маршрутов"
     },
-    "cervical_lymph_node": {
+    "cervical_lymph_node_changed": {
       "specialist": "Эндокринолог / хирург",
       "next_step": "Консультация эндокринолога",
       "planned_step": "Оценка лимфоузлов, дообследование по показаниям",
       "target_days": 14,
       "priority": "planned",
       "priority_reason": "Изменённые регионарные лимфоузлы шеи требуют уточнения",
+      "department": "Координатор клинических маршрутов"
+    },
+    "parametrial_veins_dilated": {
+      "specialist": "Гинеколог",
+      "next_step": "Консультация гинеколога",
+      "planned_step": "УЗИ в динамике, терапия по показаниям",
+      "target_days": 60,
+      "priority": "planned",
+      "priority_reason": "Расширение параметральных вен требует плановой консультации",
+      "department": "Координатор клинических маршрутов"
+    },
+    "ovary_enlarged": {
+      "specialist": "Гинеколог",
+      "next_step": "Консультация гинеколога",
+      "planned_step": "УЗИ в динамике, гормональный профиль по показаниям",
+      "target_days": 60,
+      "priority": "planned",
+      "priority_reason": "Увеличение яичника требует плановой консультации",
       "department": "Координатор клинических маршрутов"
     }
   }

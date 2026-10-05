@@ -15,7 +15,10 @@ const json = (body) => ({
 export const getMeta = () => api("/api/meta");
 export const getRoutes = (params) => api(`/api/routes?${params.toString()}`);
 export const getRoute = (id) => api(`/api/routes/${id}`);
-export const sendAction = (id, action) => api(`/api/routes/${id}/action`, json({ action }));
+export const sendAction = (id, action, role = "coordinator") =>
+  api(`/api/routes/${id}/action`, json({ action, role }));
+export const rollbackRoute = (id, role = "coordinator", force = false, preview = false) =>
+  api(`/api/routes/${id}/rollback`, json({ role, force, preview }));
 export const advanceTime = (hours) => api("/api/simulate/advance", json({ hours }));
 export const getDashboard = () => api("/api/dashboard");
 

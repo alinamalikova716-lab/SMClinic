@@ -16,7 +16,7 @@ function Highlight({ evidence, match }) {
   );
 }
 
-export default function RouteDetail({ route, meta, now, onAction, pLabel }) {
+export default function RouteDetail({ route, meta, now, onAction, onRollback, pLabel }) {
   const [openProtocol, setOpenProtocol] = useState(null);
   if (!route) return <section className="detail"><div className="empty">Выберите маршрут слева</div></section>;
 
@@ -45,6 +45,9 @@ export default function RouteDetail({ route, meta, now, onAction, pLabel }) {
           <span className={"prio prio-" + route.priority}>{pLabel(route.priority)}</span>
           {overdue && <span className="badge urgent">просрочено</span>}
           <span className="badge ok">{STATUS_LABELS[route.status] || route.status}</span>
+          <button className="btn" onClick={onRollback} title="Вернуть пациента на предыдущий этап">
+            ↶ Вернуть предыдущий этап
+          </button>
         </div>
       </div>
 
@@ -132,6 +135,9 @@ export default function RouteDetail({ route, meta, now, onAction, pLabel }) {
                   {a.label}
                 </button>
               ))}
+              <button className="btn" onClick={onRollback}>
+                ↶ Вернуть предыдущий этап
+              </button>
             </div>
           </div>
         </div>

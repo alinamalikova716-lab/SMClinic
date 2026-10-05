@@ -718,30 +718,107 @@ class Store:
             }
         )
 
-    def act(self, rid: str, action: str) -> dict | None:
+    def act(self, rid: str, action: str, role: str = "coordinator") -> dict | None:
         r = next((x for x in self.routes if x["id"] == rid), None)
         if r is None:
             return None
         now = self.now.isoformat()
+        prev_step = r["step"]
+
+        def log(event: str, label: str, changed: bool, new_status: str | None = None) -> None:
+            entry = {"at": now, "event": event, "label": label}
+            if changed:
+                entry.update({
+                    "action": "status_changed",
+                    "previous_status": prev_step,
+                    "new_status": new_status if new_status is not None else r["step"],
+                    "user_role": role,
+                })
+            r["history"].append(entry)
+
         if action == "no_show":
             r["status"] = "no_show"
             r["step"] = "notification"
-            r["history"].append({"at": now, "event": "no_show", "label": ACTION_LABELS["no_show"]})
+            log("no_show", ACTION_LABELS["no_show"], True, "notification")
             self._send_notification(r, "Просьба перезаписаться (после неявки)")
         elif action == "resend":
             self._send_notification(r, "Повторное уведомление")
-            r["history"].append({"at": now, "event": "resend", "label": ACTION_LABELS["resend"]})
+            log("resend", ACTION_LABELS["resend"], False)
         elif action == "call":
             r["tasks"].append({"at": now, "label": "Обзвонить пациента", "owner": "Координатор"})
-            r["history"].append({"at": now, "event": "call", "label": ACTION_LABELS["call"]})
+            log("call", ACTION_LABELS["call"], False)
         elif action == "not_engaged":
             r["status"] = "not_engaged"
-            r["history"].append({"at": now, "event": "not_engaged", "label": ACTION_LABELS["not_engaged"]})
+            log("not_engaged", ACTION_LABELS["not_engaged"], True, "not_engaged")
         elif action in ACTION_TO_STEP:
             step = ACTION_TO_STEP[action]
             r["step"] = step
             r["status"] = "closed" if step == "closed" else step
-            r["history"].append({"at": now, "event": action, "label": ACTION_LABELS[action]})
+            log(action, ACTION_LABELS[action], True, step)
+        return self._full(r)
+
+    # ---------- откат статуса ----------
+    def rollback(self, rid: str, role: str = "coordinator", force: bool = False,
+                 preview: bool = False) -> dict | None:
+        r = next((x for x in self.routes if x["id"] == rid), None)
+        if r is None:
+            return None
+        order = steps_for(r["route"])
+        cur = r["step"]
+        if cur == "closed":
+            target = order[-1]
+        elif cur in order:
+            idx = order.index(cur)
+            if idx == 0:
+                return {"error": "Маршрут уже на первом этапе", "route": self._full(r)}
+            target = order[idx - 1]
+        elif cur in ("no_show", "not_engaged"):
+            target = "notification"
+        else:
+            target = order[0]
+
+        # целостность: этапы, которые уже выполнены и будут отменены этим откатом.
+        cur_idx = len(order) - 1 if cur == "closed" else (
+            order.index(cur) if cur in order else len(order) - 1
+        )
+        target_idx = order.index(target) if target in order else 0
+        dependents = [order[i] for i in range(target_idx + 1, cur_idx + 1)]
+        later_steps = [
+            {"code": s, "label": _STEP_TITLES.get(s, s)} for s in dict.fromkeys(dependents)
+        ]
+
+        if preview:
+            return {
+                "preview": True,
+                "from_status": cur,
+                "to_status": target,
+                "from_label": _STEP_TITLES.get(cur, cur),
+                "to_label": _STEP_TITLES.get(target, target),
+                "later_steps": later_steps,
+                "route": self._full(r),
+            }
+
+        if dependents and not force:
+            return {
+                "requires_confirmation": True,
+                "message": "Откат отменит уже выполненные зависимые этапы.",
+                "later_steps": later_steps,
+                "route": self._full(r),
+            }
+
+        now = self.now.isoformat()
+        prev_step = r["step"]
+        r["step"] = target
+        r["status"] = target
+        r["history"].append({
+            "at": now,
+            "event": "status_rollback",
+            "label": f"Возврат на предыдущий этап: {_STEP_TITLES.get(target, target)}",
+            "action": "status_rollback",
+            "previous_status": prev_step,
+            "new_status": target,
+            "user_role": role,
+        })
         return self._full(r)
 
     # ---------- модельное время ----------
