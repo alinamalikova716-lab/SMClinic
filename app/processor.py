@@ -49,6 +49,14 @@ ABSENCE_CUES = [
 
 NEGATION_CUES = LOCAL_CUES + ABSENCE_CUES
 
+# Признаки изменения: их наличие говорит, что рядом описан патологический признак,
+# а не отрицание («не изменены, но определяется лимфоузел с утолщённым корковым слоем»).
+CHANGE_MARKERS = [
+    "утолщен", "гипоэхоген", "нечетк", "снижен дифференц",
+    "деформирован", "неоднородн", "снижен", "повышен",
+    "с нечетк", "неровн",
+]
+
 # «нет <патологии>» и «без … изменений» — только с существительным-мишенью.
 NO_FINDING_RE = re.compile(
     r"\bнет\s+(признак|данных|образован|узл|кист|конкремент|патолог|изменен|атеросклеротическ)"
@@ -96,6 +104,10 @@ _RIGHT_MARKERS = ["правая молочная", "правая доля", "п�
                   "справа", "правая", "правой", "правого", "правым", "правый"]
 _LEFT_MARKERS = ["левая молочная", "левая доля", "левый яичник", "левое яичко",
                  "слева", "левая", "левой", "левого", "левым", "левый"]
+_BILATERAL_MARKERS = [
+    "обеих долях", "обеих молочных", "обоих яичниках",
+    "с двух сторон", "с обеих сторон", "двусторонн", "билатеральн",
+]
 
 
 def _norm(text: str) -> str:
@@ -110,6 +122,27 @@ def _strip_boilerplate(text: str) -> str:
     for m in BOILERPLATE_MARKERS:
         cleaned = re.sub(rf"{re.escape(m)}[^\n]*", " ", cleaned, flags=re.I)
     return cleaned
+
+
+# Частые опечатки в реальных протоколах — иначе правила их не видят.
+TYPO_MAP = {
+    "уиление": "усиление",
+    "дорленижнем": "доле нижнем",
+    "разерами": "размерами",
+    "погиженной": "пониженной",
+    "двласти": "доли",
+    "г не однородна": "неоднородна",
+    "глотоании": "глотании",
+    "железщ": "железы",
+    "отсуств": "отсутств",
+}
+
+
+def _fix_typos(text: str) -> str:
+    out = text
+    for wrong, right in TYPO_MAP.items():
+        out = re.sub(re.escape(wrong), right, out, flags=re.I)
+    return out
 
 
 def _spans(norm_text: str, splitter: re.Pattern) -> list[tuple[int, int]]:
@@ -166,17 +199,50 @@ def load_rules() -> tuple[dict, dict, dict]:
 
 # ── Определение сторон и заключения ─────────────────────────────────────────
 
-def _section_of(norm_text: str, pos: int) -> str:
-    """right / left / unknown — по последней шапке секции перед находкой (п. 1.1)."""
-    r = max((norm_text.rfind(m, 0, pos) for m in _RIGHT_MARKERS), default=-1)
-    l = max((norm_text.rfind(m, 0, pos) for m in _LEFT_MARKERS), default=-1)
-    if r < 0 and l < 0:
-        return "unknown"
-    if r > l:
+def _section_of(norm_text: str, pos: int, match: str = "", window: int = 40) -> str:
+    """right / left / bilateral / unknown.
+    Сначала смотрим в сам match, потом в узкое окно ±window и берём БЛИЖАЙШИЙ маркер."""
+    m = (match or "").lower()
+    if any(w in m for w in _BILATERAL_MARKERS):
+        return "bilateral"
+    r_in = any(w in m for w in _RIGHT_MARKERS)
+    l_in = any(w in m for w in _LEFT_MARKERS)
+    if r_in and l_in:
+        return "bilateral"
+    if r_in:
         return "right"
-    if l > r:
+    if l_in:
         return "left"
-    return "unknown"
+
+    lo = max(0, pos - window)
+    hi = min(len(norm_text), pos + len(match or "") + window)
+    local = norm_text[lo:hi]
+    if any(w in local for w in _BILATERAL_MARKERS):
+        return "bilateral"
+
+    def nearest(markers: list[str]) -> int | None:
+        best = None
+        for w in markers:
+            i = local.find(w)
+            while i != -1:
+                d = abs((lo + i) - pos)
+                if best is None or d < best:
+                    best = d
+                i = local.find(w, i + 1)
+        return best
+
+    dr, dl = nearest(_RIGHT_MARKERS), nearest(_LEFT_MARKERS)
+    if dr is None and dl is None:
+        return "unknown"
+    if dr is None:
+        return "left"
+    if dl is None:
+        return "right"
+    if dr < dl:
+        return "right"
+    if dl < dr:
+        return "left"
+    return "bilateral"
 
 
 _ZAKL_WORD = re.compile(r"заключени[ея]", re.I)
@@ -253,13 +319,19 @@ def _make_quote(text: str, sa: int, sb: int, start: int, end: int, max_len: int 
     return frag.strip()
 
 
-def _guard_value(window: str, kind: str | None) -> int | None:
+def _guard_value(window: str, kind: str | None) -> int | float | None:
     if kind == "birads":
-        m = re.search(r"bi[\s-]?rads[^0-9]{0,15}(\d)", window)
-        return int(m.group(1)) if m else None
+        vals = [int(v) for v in re.findall(r"bi[\s-]?rads[^0-9]{0,15}(\d)", window)]
+        return max(vals) if vals else None
     if kind == "tirads":
-        m = re.search(r"ti[\s-]?rads[^0-9]{0,15}(\d)", window)
+        vals = [int(v) for v in re.findall(r"ti[\s-]?rads[^0-9]{0,15}(\d)", window)]
+        return max(vals) if vals else None
+    if kind == "stenosis_pct":
+        m = re.search(r"стеноз\w*[^\d%]{0,15}(\d{1,3})(?:\s*[-–—]\s*\d{1,3})?\s*%", window)
         return int(m.group(1)) if m else None
+    if kind == "vein_mm":
+        m = re.search(r"(\d+[.,]?\d*)\s*мм", window)
+        return float(m.group(1).replace(",", ".")) if m else None
     return None
 
 
@@ -292,8 +364,19 @@ def _uncertainty_markers(uncertainty: dict) -> list[str]:
     return [_norm(m) for m in markers]
 
 
+def _max_category(f: Finding) -> int:
+    """Максимальная категория BI-RADS/TI-RADS у находки (0, если не указана)."""
+    for key in ("birads", "tirads"):
+        vals = f.attributes.get(key)
+        if not vals:
+            continue
+        vals = vals if isinstance(vals, list) else [vals]
+        return max(int(v) for v in vals)
+    return 0
+
+
 def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
-    text = _strip_boilerplate(text)
+    text = _fix_typos(_strip_boilerplate(text))
     norm = _norm(text)
     sents = _spans(norm, SENT_SPLIT)
     clauses = _spans(norm, CLAUSE_SPLIT)
@@ -324,7 +407,7 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
                 if sent_span is None:
                     continue
                 sa, sb = sent_span
-
+                sent_text = norm[sa:sb]
                 # require_context — орган рядом (окно настраивается правилом)
                 req = rule.get("require_context")
                 if req:
@@ -335,6 +418,14 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
                         cw = rule.get("context_window", 200)
                         cwindow = norm[max(0, start - cw): min(len(norm), end + cw)]
                     if not any(_norm(w) in cwindow for w in req):
+                        continue
+
+                # organ_context — обязательная привязка к органу (аксиллярные ≠ щитовидка)
+                organ = rule.get("organ_context")
+                if organ:
+                    ow = rule.get("organ_window", 200)
+                    owin = norm[max(0, start - ow): min(len(norm), end + ow)]
+                    if not any(_norm(w) in owin for w in organ):
                         continue
 
                 # exclude_context — обороты, которые не являются патологией
@@ -364,11 +455,14 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
                 exceptions = [_norm(e) for e in uncertainty.get("negation_exceptions", [])]
                 excepted = any(e in window for e in exceptions)
 
-                sent_text = norm[sa:sb]
+                cues_text = sent_text
                 cue = next((c for c in LOCAL_CUES if c in window), "")
                 absence = next((c for c in ABSENCE_CUES if c in sent_text), "")
                 no_finding = NO_FINDING_RE.search(window)
                 negated = bool(cue) or bool(absence) or bool(no_finding)
+                # если в предложении есть признак изменения — это не отрицание, а описание находки
+                if negated and any(m in sent_text for m in CHANGE_MARKERS):
+                    negated = False
 
                 marker = next((m for m in markers if m in window), "")
                 limited = any(m in window for m in limited_markers)
@@ -387,6 +481,9 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
 
                 in_concl = bool(has_concl) and start >= concl_start
 
+                lat_override = rule.get("laterality_override")
+                lat = lat_override if lat_override else _section_of(norm, start, text[start:end])
+
                 results.append(
                     Finding(
                         id=rule["id"],
@@ -399,7 +496,7 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
                         match=text[start:end],
                         attributes={
                             **_extract_attributes(window, rule.get("attributes", [])),
-                            "laterality": _section_of(norm, start),
+                            "laterality": lat,
                             **({"requires_review": True} if marker else {}),
                         },
                         marker=marker,
@@ -415,10 +512,19 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
     #  2) clinical  — клинический риск: находка есть в описании, но не вынесена
     #                 в заключение (в заключении нет ни одной находки из описания).
     # Маршрут и уведомление пациенту при этом всё равно создаются.
+    # Значимые находки: BI-RADS/TI-RADS 3+ или независимая подтверждённая находка.
+    has_significant = any(_max_category(f) >= 3 for f in results)
+    has_significant = has_significant or any(
+        rule_meta.get(f.id, {}).get("independent", True) and f.status == "trigger"
+        for f in results
+    )
+
     if results:
         if not has_concl and not UNDERSTANDABLE_RE.search(norm):
             for f in results:
-                if f.status != "negated" and not f.marker and not rule_meta.get(f.id, {}).get("specific"):
+                if (f.status != "negated" and not f.marker
+                        and not rule_meta.get(f.id, {}).get("specific")
+                        and not has_significant):
                     f.status = "uncertain"
                     f.flag = "structure"
                     f.issue = "Нет заключения, диагноза и рекомендации — проверьте оформление протокола"
@@ -434,7 +540,8 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
                     # находка со сформированным сомнением («нельзя исключить») — триггер,
                     # в уточнение не переводим
                     if (f.status != "negated" and not f.in_conclusion and not f.marker
-                            and not rule_meta.get(f.id, {}).get("specific")):
+                            and not rule_meta.get(f.id, {}).get("specific")
+                            and not has_significant):
                         f.status = "uncertain"
                         f.flag = "clinical"
                         f.issue = "Находка описана в протоколе, но не вынесена в заключение"
@@ -472,21 +579,9 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
                     f.negation_cue = "фоновое изменение без клинически значимого признака"
 
     # Если в заключении прямо сказано «патологии не выявлено» — протокол норма,
-    # фоновые описания находкой не считаются.
-    # Если в заключении прямо сказано «патологии не выявлено» — протокол норма,
-    # фоновые описания находкой не считаются. Но если есть значимая находка
-    # (BI-RADS/TI-RADS 3 и выше), заключение не считается нормой.
+    # фоновые описания находкой не считаются. Но значимые находки не гасим.
     if has_concl:
         concl_norm = norm[concl_start:]
-        has_significant = any(
-            (lambda v: bool(v) and max(v) >= 3)(
-                f.attributes.get("birads") or f.attributes.get("tirads") or []
-                if isinstance(f.attributes.get("birads") or f.attributes.get("tirads") or [], list)
-                else [f.attributes.get("birads") or f.attributes.get("tirads")]
-            )
-            for f in results
-        )
-        # «Нельзя исключить» в заключении означает, что заключение не является нормой.
         concl_has_doubt = any(m in concl_norm for m in markers)
         if not has_significant and not concl_has_doubt and re.search(
             r"патологии[^\n.]{0,40}не выявлен|без патологии|"
