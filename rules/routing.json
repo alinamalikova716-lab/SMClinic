@@ -200,9 +200,18 @@
       "specialist": "Маммолог",
       "next_step": "Консультация маммолога",
       "planned_step": "УЗИ в динамике, пункция по показаниям",
-      "target_days": 30,
-      "priority": "watch",
-      "priority_reason": "Кистозные изменения, плановое наблюдение",
+      "target_days": 14,
+      "priority": "planned",
+      "priority_reason": "Киста молочной железы — плановая консультация маммолога",
+      "department": "Координатор клинических маршрутов"
+    },
+    "nabothian_cysts": {
+      "specialist": "Гинеколог",
+      "next_step": "Консультация гинеколога",
+      "planned_step": "УЗ-контроль в динамике",
+      "target_days": 14,
+      "priority": "planned",
+      "priority_reason": "Наботовы кисты шейки матки — плановая консультация гинеколога",
       "department": "Координатор клинических маршрутов"
     },
     "breast_fibrosis": {
@@ -227,9 +236,9 @@
       "specialist": "Гинеколог",
       "next_step": "Консультация гинеколога (определение тактики)",
       "planned_step": "Кольпоскопия, УЗИ в динамике",
-      "target_days": 30,
-      "priority": "watch",
-      "priority_reason": "Доброкачественные изменения шейки матки",
+      "target_days": 14,
+      "priority": "planned",
+      "priority_reason": "Изменения шейки матки — плановая консультация гинеколога",
       "department": "Координатор клинических маршрутов"
     },
     "cervical_polyp": {
@@ -401,6 +410,24 @@
       "target_days": 30,
       "priority": "watch",
       "priority_reason": "Изменения селезенки, наблюдение",
+      "department": "Координатор клинических маршрутов"
+    },
+    "axillary_lymphadenopathy": {
+      "specialist": "Маммолог / онколог",
+      "next_step": "Консультация маммолога",
+      "planned_step": "Оценка лимфоузлов, УЗ-контроль, дообследование по показаниям",
+      "target_days": 14,
+      "priority": "planned",
+      "priority_reason": "Изменённые аксиллярные лимфоузлы требуют уточнения",
+      "department": "Координатор клинических маршрутов"
+    },
+    "gallbladder_deformity": {
+      "specialist": "Гастроэнтеролог",
+      "next_step": "Консультация гастроэнтеролога (по сопутствующим изменениям)",
+      "planned_step": "УЗ-контроль в динамике",
+      "target_days": 30,
+      "priority": "watch",
+      "priority_reason": "Деформация ЖП сама по себе маршрут не создаёт",
       "department": "Координатор клинических маршрутов"
     }
   }

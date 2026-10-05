@@ -30,16 +30,24 @@ RULES = os.path.join(HERE, "rules")
 # ── Отрицания ───────────────────────────────────────────────────────────────
 # Только осмысленные обороты. Голое «нет » убрано (п. 1.3) — заменено
 # регексом NO_FINDING_RE, который требует существительное-мишень.
-NEGATION_CUES = [
-    "не выявлен", "не выявляется", "не определяется", "не определяются",
-    "не обнаружен", "не лоциру", "не визуализир",
+# Отрицания делим на два вида.
+# LOCAL — характеристика рядом с находкой, действует в пределах клаузы.
+LOCAL_CUES = [
     "не изменен", "не утолщен", "не расширен", "не деформирован",
     "не увеличен", "не увеличена", "не увеличены", "не подтвержд",
     "не отмеч", "не характерн", "не нарушен", "не зафиксирован",
     "без признак", "без образован", "без изменен", "без особенност",
-    "без патологии", "без стеноз", "без смещен", "отсутств",
-    "нет данных", "не получено",
+    "без патологии", "без стеноз", "без смещен",
 ]
+# ABSENCE — отсутствие находки; действует на всё предложение, в т.ч. на перечень
+# «A, B и C не выявлены» — гасит все элементы списка.
+ABSENCE_CUES = [
+    "не выявлен", "не выявляется", "не определяется", "не определяются",
+    "не обнаружен", "не лоциру", "не визуализир", "отсутств",
+    "нет данных", "не получено", "данных за",
+]
+
+NEGATION_CUES = LOCAL_CUES + ABSENCE_CUES
 
 # «нет <патологии>» и «без … изменений» — только с существительным-мишенью.
 NO_FINDING_RE = re.compile(
@@ -78,8 +86,8 @@ UNDERSTANDABLE_RE = re.compile(
 # они считаются шумом и снимаются (guard из ТЗ).
 CLINICAL_RISK_SHARE_LIMIT = 0.05
 
-# Границы предложений: точка/!/? + пробел, либо перенос строки (п. 2.1).
-SENT_SPLIT = re.compile(r"(?<=[.!?])\s+|\n+")
+# Границы предложений: точка/!/? перед НЕ-цифрой (чтобы не рвать «4.8»), либо перенос строки.
+SENT_SPLIT = re.compile(r"(?<=[.!?])(?=\D)|\n+")
 # Клаузы: запятая, точка с запятой, двоеточие, тире, перенос строки (п. 1.4).
 CLAUSE_SPLIT = re.compile(r"[,;:—–]|\n+")
 
@@ -320,8 +328,12 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
                 # require_context — орган рядом (окно настраивается правилом)
                 req = rule.get("require_context")
                 if req:
-                    cw = rule.get("context_window", 200)
-                    cwindow = norm[max(0, start - cw): min(len(norm), end + cw)]
+                    # контекст ищем в пределах предложения (орган обычно там же),
+                    # чтобы не захватывать чужие фразы соседних предложений
+                    cwindow = norm[sa:sb]
+                    if len(cwindow) < 40:
+                        cw = rule.get("context_window", 200)
+                        cwindow = norm[max(0, start - cw): min(len(norm), end + cw)]
                     if not any(_norm(w) in cwindow for w in req):
                         continue
 
@@ -352,9 +364,11 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
                 exceptions = [_norm(e) for e in uncertainty.get("negation_exceptions", [])]
                 excepted = any(e in window for e in exceptions)
 
-                cue = next((c for c in NEGATION_CUES if c in window), "")
+                sent_text = norm[sa:sb]
+                cue = next((c for c in LOCAL_CUES if c in window), "")
+                absence = next((c for c in ABSENCE_CUES if c in sent_text), "")
                 no_finding = NO_FINDING_RE.search(window)
-                negated = bool(cue) or bool(no_finding)
+                negated = bool(cue) or bool(absence) or bool(no_finding)
 
                 marker = next((m for m in markers if m in window), "")
                 limited = any(m in window for m in limited_markers)
@@ -363,6 +377,10 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
                 # это ТРИГГЕР: находку видит врач, он и поставит диагноз.
                 if not excepted and negated:
                     status, confidence, marker = "negated", 0.55, ""
+                elif marker:
+                    # «Нельзя исключить X» — триггер с пометкой requires_review
+                    status, confidence = "trigger", 0.7
+                    cue = ""
                 else:
                     status, confidence = "trigger", 0.9
                     cue = ""
@@ -382,9 +400,10 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
                         attributes={
                             **_extract_attributes(window, rule.get("attributes", [])),
                             "laterality": _section_of(norm, start),
+                            **({"requires_review": True} if marker else {}),
                         },
                         marker=marker,
-                        negation_cue=cue or (no_finding.group(0) if no_finding else ""),
+                        negation_cue=cue or absence or (no_finding.group(0) if no_finding else ""),
                         rule_version=triggers["version"],
                         in_conclusion=in_concl,
                         limited=limited,
@@ -399,7 +418,7 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
     if results:
         if not has_concl and not UNDERSTANDABLE_RE.search(norm):
             for f in results:
-                if f.status != "negated" and not f.marker:
+                if f.status != "negated" and not f.marker and not rule_meta.get(f.id, {}).get("specific"):
                     f.status = "uncertain"
                     f.flag = "structure"
                     f.issue = "Нет заключения, диагноза и рекомендации — проверьте оформление протокола"
@@ -414,7 +433,8 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
                 for f in results:
                     # находка со сформированным сомнением («нельзя исключить») — триггер,
                     # в уточнение не переводим
-                    if f.status != "negated" and not f.in_conclusion and not f.marker:
+                    if (f.status != "negated" and not f.in_conclusion and not f.marker
+                            and not rule_meta.get(f.id, {}).get("specific")):
                         f.status = "uncertain"
                         f.flag = "clinical"
                         f.issue = "Находка описана в протоколе, но не вынесена в заключение"
@@ -424,9 +444,13 @@ def extract(text: str, triggers: dict, uncertainty: dict) -> list[Finding]:
     birads_all = [int(v) for v in re.findall(r"bi[\s-]?rads[^0-9]{0,15}(\d)", norm)]
     if birads_all and all(v in (1, 2) for v in birads_all):
         for f in results:
-            if rule_meta.get(f.id, {}).get("group") == "breast" and f.status != "negated":
+            meta = rule_meta.get(f.id, {})
+            # при BI-RADS 1–2 гасим только фоновые находки группы breast,
+            # независимые значимые (образование, изменённые лимфоузлы) остаются
+            if (meta.get("group") == "breast" and not meta.get("independent", True)
+                    and f.status != "negated"):
                 f.status = "negated"
-                f.negation_cue = "BI-RADS 1–2 — сам по себе не создаёт маршрут"
+                f.negation_cue = "BI-RADS 1–2 — фоновое изменение"
 
     # Фоновые находки (independent=false) не создают маршрут, если в той же группе
     # (органе) нет клинически значимой находки. Само слово «киста/фиброз/мастопатия»
